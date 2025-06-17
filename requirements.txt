@@ -5,5 +5,8 @@ python-dotenv
 nest_asyncio
 apscheduler
 requests
-openai-whisper
+git+https://github.com/openai/whisper.git
+torch
+ffmpeg-python
+
 
