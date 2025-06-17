@@ -9,5 +9,7 @@ git+https://github.com/openai/whisper.git
 torch
 ffmpeg-python
 deep-translator
+feedparser
+
 
 
