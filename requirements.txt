@@ -5,4 +5,5 @@ python-dotenv
 nest_asyncio
 apscheduler
 requests
-nest_asyncio
+openai-whisper
+
