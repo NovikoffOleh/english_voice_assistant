@@ -1,0 +1,13 @@
+Hey there! I’m your personal assistant — here to help with anything you need.**
+From meal advice to math problems, daily planning, or even personalized workout routines — I’ve got your back.
+
+🎤 Just talk to me or type a message like:
+**“What can I eat with gout?”** – I’ll suggest a healthy meal plan.
+**“Show me a ginger cat”** – I’ll send you a cute picture.
+
+👉 Want to explore what I can do? Tap **/help**
+🖼 Looking for an image? Try words like: “show,” “download,” “photo,” or “image”
+🗓 Need to plan your day? Just say “Task” or tap **/plan**
+
+When you're done, simply say **“Thanks”** or **“Goodbye”** — and I’ll quietly take a break ☺️
+
