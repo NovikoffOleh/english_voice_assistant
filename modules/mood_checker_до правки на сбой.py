@@ -19,7 +19,7 @@ MOOD_CALLBACKS = {
     "sad": "😒",
     "happy": "😃",
     "sick": "🤒",
-    "in love": "🥰",
+    "love": "🥰",
     "tired": "🥱"
 }
 
@@ -32,7 +32,7 @@ def get_mood_keyboard():
         ],
         [
             InlineKeyboardButton(text="🤒", callback_data="mood_sick"),
-            InlineKeyboardButton(text="🥰", callback_data="mood_in love"),
+            InlineKeyboardButton(text="🥰", callback_data="mood_love"),
             InlineKeyboardButton(text="🥱", callback_data="mood_tired")
         ]
     ]
@@ -52,11 +52,7 @@ async def send_mood_request(app):
 
 async def handle_mood_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
-    if not query:
-        return
-
     await query.answer()
-
     mood_key = query.data.replace("mood_", "")
     emoji = MOOD_CALLBACKS.get(mood_key, "😐")
     name = context.user_data.get("name", "friend")
@@ -79,9 +75,6 @@ async def handle_mood_callback(update: Update, context: ContextTypes.DEFAULT_TYP
 
     try:
         response = ask_gpt(mood_prompt)
-        if response.startswith("⚠️"):
-            await query.edit_message_text("⚠️ Sorry, couldn't fetch a reply. Try again later.")
-        else:
-            await query.edit_message_text(f"{emoji} {name}, {response}")
+        await query.edit_message_text(f"{emoji} {name}, {response}")
     except Exception as e:
         await query.edit_message_text(f"⚠️ Something went wrong. Try again. ({e})")

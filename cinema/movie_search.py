@@ -7,29 +7,29 @@ load_dotenv()
 OMDB_API_KEY = os.getenv("OMDB_API_KEY")
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 
-
 def search_movie(query: str) -> dict | None:
     if not OMDB_API_KEY:
-        return {"error": "OMDB API key is missing"}
+        return {"error": "OMDb API key is missing."}
 
     url = f"http://www.omdbapi.com/?apikey={OMDB_API_KEY}&t={query}"
-    response = requests.get(url)
+    try:
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        data = response.json()
 
-    if response.status_code != 200:
-        return {"error": "OMDb API error"}
+        if data.get("Response") == "False":
+            return None
 
-    data = response.json()
-    if data.get("Response") == "False":
-        return None
-
-    return {
-        "title": data.get("Title"),
-        "year": data.get("Year"),
-        "rating": data.get("imdbRating"),
-        "plot": data.get("Plot"),
-        "poster": data.get("Poster"),
-        "imdb_link": f"https://www.imdb.com/title/{data.get('imdbID')}"
-    }
+        return {
+            "title": data.get("Title"),
+            "year": data.get("Year"),
+            "rating": data.get("imdbRating"),
+            "plot": data.get("Plot"),
+            "poster": data.get("Poster"),
+            "imdb_link": f"https://www.imdb.com/title/{data.get('imdbID')}"
+        }
+    except Exception as e:
+        return {"error": f"OMDb API request failed: {e}"}
 
 
 def get_top_movies() -> list:
@@ -49,23 +49,25 @@ def get_top_movies() -> list:
         "page": 1
     }
 
-    response = requests.get(url, params=params)
-    if response.status_code != 200:
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        print(f"[TMDb Top Movies] ❌ {e}")
         return []
 
-    data = response.json()
-    movies = []
-    for movie in data.get("results", [])[:10]:
-        movies.append({
-            "title": movie.get("title"),
-            "year": movie.get("release_date", "")[:4],
-            "rating": movie.get("vote_average"),
-            "plot": movie.get("overview"),
-            "poster": f"https://image.tmdb.org/t/p/w500{movie.get('poster_path')}" if movie.get("poster_path") else None,
-            "link": f"https://www.themoviedb.org/movie/{movie.get('id')}"
-        })
-
-    return movies
+    return [
+        {
+            "title": m.get("title"),
+            "year": m.get("release_date", "")[:4],
+            "rating": m.get("vote_average"),
+            "plot": m.get("overview"),
+            "poster": f"https://image.tmdb.org/t/p/w500{m.get('poster_path')}" if m.get("poster_path") else None,
+            "link": f"https://www.themoviedb.org/movie/{m.get('id')}"
+        }
+        for m in data.get("results", [])[:10]
+    ]
 
 
 def get_top_by_genre(genre_id: int) -> list:
@@ -82,20 +84,22 @@ def get_top_by_genre(genre_id: int) -> list:
         "page": 1
     }
 
-    response = requests.get(url, params=params)
-    if response.status_code != 200:
+    try:
+        response = requests.get(url, params=params, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+    except Exception as e:
+        print(f"[TMDb Genre Search] ❌ {e}")
         return []
 
-    data = response.json()
-    movies = []
-    for movie in data.get("results", [])[:5]:
-        movies.append({
-            "title": movie.get("title"),
-            "year": movie.get("release_date", "")[:4],
-            "rating": movie.get("vote_average"),
-            "plot": movie.get("overview"),
-            "poster": f"https://image.tmdb.org/t/p/w500{movie.get('poster_path')}" if movie.get("poster_path") else None,
-            "link": f"https://www.themoviedb.org/movie/{movie.get('id')}"
-        })
-
-    return movies
+    return [
+        {
+            "title": m.get("title"),
+            "year": m.get("release_date", "")[:4],
+            "rating": m.get("vote_average"),
+            "plot": m.get("overview"),
+            "poster": f"https://image.tmdb.org/t/p/w500{m.get('poster_path')}" if m.get("poster_path") else None,
+            "link": f"https://www.themoviedb.org/movie/{m.get('id')}"
+        }
+        for m in data.get("results", [])[:5]
+    ]

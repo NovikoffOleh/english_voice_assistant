@@ -157,14 +157,14 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         await start(update, context)
         return
 
-    if text == ["🌤 weather forecast"]:
+    if text == "🌤 weather forecast":
         context.user_data["awaiting_city"] = True
         name = context.user_data.get("name", "friend")
         await update.message.reply_text("📍 Please specify the city to get the forecast:")
 
         return
 
-    if text == ["🗞 news", "news","/news"]:
+    if text == "🗞 news":
         await update.message.reply_text("📡 Fetching the latest news...")
         news_list = fetch_news(language="en", limit=4)  # Changed to English
         for item in news_list:
@@ -182,7 +182,7 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
 
     trigger_words = ["show", "upload", "photo", "image", "download", "picture"]
 
-    if text in ["/cinema", "movies", "watch", "cinema", "🎮 movies"]:
+    if text in ["/cinema", "movies", "watch", "🎮 movies"]:
         await cinema_command(update, context)
         return
 
@@ -273,7 +273,7 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         return
 
     
-    if text == ["🧘 relax", "/relax", "relax"]:
+    if text == "🧘 relax":
         keyboard = [["🌧 Rain", "🔥 Fireplace", "🎵 Relax"], ["🔙 Main Menu"]]
         await update.message.reply_text("🧘 Choose a relaxation mode:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
         return
@@ -300,11 +300,11 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         await news_command(update, context)
         return
 
-    if text in ["queries", "dialogue", "/gpt", "💬 queries"]:
+    if text in ["queries", "/gpt", "💬 queries"]:
         await gpt_mode(update, context)
         return
 
-    if text in ["tasks", "/plan", "design", "proposition","🗓 plan"]:
+    if text in ["tasks", "/plan", "plan", "🗓 Plan"]:
         context.user_data["awaiting_task"] = True
         await update.message.reply_text("📝 What exactly shall we plan? For example: 'Remind me in 10 minutes about the meeting'")
         return

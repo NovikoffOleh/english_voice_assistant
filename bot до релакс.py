@@ -157,14 +157,14 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         await start(update, context)
         return
 
-    if text == ["🌤 weather forecast"]:
+    if text == "🌤 weather forecast":
         context.user_data["awaiting_city"] = True
         name = context.user_data.get("name", "friend")
         await update.message.reply_text("📍 Please specify the city to get the forecast:")
 
         return
 
-    if text == ["🗞 news", "news","/news"]:
+    if text == "🗞 news":
         await update.message.reply_text("📡 Fetching the latest news...")
         news_list = fetch_news(language="en", limit=4)  # Changed to English
         for item in news_list:
@@ -182,7 +182,7 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
 
     trigger_words = ["show", "upload", "photo", "image", "download", "picture"]
 
-    if text in ["/cinema", "movies", "watch", "cinema", "🎮 movies"]:
+    if text in ["/cinema", "movies", "watch", "🎮 Movies"]:
         await cinema_command(update, context)
         return
 
@@ -214,7 +214,7 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         await update.message.reply_text("📽 Choose the next action:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
         return
 
-    if text == "⭐ top rated movies":
+    if text == "⭐ Top Rated Movies":
         await update.message.reply_text("📊 Fetching top movies...")
         movies = get_top_movies()
         if not movies:
@@ -272,39 +272,37 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         await update.message.reply_text("🎯 Choose the next action:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
         return
 
-    
-    if text == ["🧘 relax", "/relax", "relax"]:
-        keyboard = [["🌧 Rain", "🔥 Fireplace", "🎵 Relax"], ["🔙 Main Menu"]]
+    if text == "🧘 relax":
+        keyboard = [["🌧 Rain", "🔥 Fireplace", "🎵 Relax Music"], ["🔙 Main Menu"]]
         await update.message.reply_text("🧘 Choose a relaxation mode:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
         return
 
-    if text in ["🌧 rain", "🔥 fireplace", "🎵 relax"]:
+    if text in ["🌧 Rain", "🔥 Fireplace", "🎵 Relax Music"]:
         sounds = {
-            "🌧 rain": "https://www.youtube.com/watch?v=GxE6g1fLxoo",
-            "🔥 fireplace": "https://www.youtube.com/watch?v=eyU3bRy2x44",
-            "🎵 relaxmusic": "https://www.youtube.com/watch?v=2OEL4P1Rz04"
+            "🌧 Rain": "https://www.youtube.com/watch?v=GxE6g1fLxoo",
+            "🔥 Fireplace": "https://www.youtube.com/watch?v=eyU3bRy2x44",
+            "🎵 Relax Music": "https://www.youtube.com/watch?v=2OEL4P1Rz04"
         }
         await update.message.reply_text(f"🎧 Enjoy relaxation: {sounds[text]}")
         return
 
-    if text == "🔙 main menu":
+    if text == "🔙 Main Menu":
         await start(update, context)
         return
-
 
     if text in ["ℹ️ help", "/help"]:
         await help_command(update, context)
         return
         
-    if text in ["🗞 news", "/news"]:
+    if text in ["🗞 News", "/news"]:
         await news_command(update, context)
         return
 
-    if text in ["queries", "dialogue", "/gpt", "💬 queries"]:
+    if text in ["queries", "/gpt", "💬 queries"]:
         await gpt_mode(update, context)
         return
 
-    if text in ["tasks", "/plan", "design", "proposition","🗓 plan"]:
+    if text in ["tasks", "/plan", "plan", "🗓 Plan"]:
         context.user_data["awaiting_task"] = True
         await update.message.reply_text("📝 What exactly shall we plan? For example: 'Remind me in 10 minutes about the meeting'")
         return

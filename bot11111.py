@@ -15,7 +15,7 @@ from telegram.ext import (
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from modules.voice_recognizer import recognize_speech
+#from modules.voice_recognizer import recognize_speech
 from modules.gpt_handler import ask_gpt
 from modules.image_search import get_image_url
 from cinema.movie_search import search_movie, get_top_movies, get_top_by_genre
@@ -58,7 +58,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ["💬 Queries", "🎮 Movies"],
         ["🗓 Plan", "🧘 Relax"],
         ["🌤 Weather Forecast", "🗞 News"],  # &lt;--- ADDED
-        ["ℹ️ Help"]
+        ["ℹ️ Help", "🌐 Language"]
     ]
 
     now = datetime.now().hour
@@ -103,7 +103,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/plan — reminders or urgent tasks\n"
         "/cinema — find a movie\n"
         "/relax — emotional relaxation\n"
-        "/news — news for the hour\n"
+        "/lang — choose a language\n"
         "/gpt — query mode\n"
         "/help — help\n"
         "⚠️ — tasks with time intervals like 'remind me at 8:45 PM to turn on the TV' can only be entered manually\n"
@@ -122,32 +122,44 @@ async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"🔄  {name}, query mode is activated — you can ask questions or search for images.")
 
+#async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#    try:
+#    if update.message.voice:
+#            file = await context.bot.get_file(update.message.voice.file_id)
+#            voice_path = f"data/{update.message.voice.file_id}.ogg"
+#            await file.download_to_drive(voice_path)
+#            await update.message.reply_text("🎧 Recognizing speech...")
+#            try:
+#                recognized_text = recognize_speech(voice_path)
+#                recognized_text = re.sub(r"[^\w\s]", "", #recognized_text).lower().strip()
+ #               await update.message.reply_text(f"💤 #{context.user_data.get('name', 'friend')}, you said: {recognized_text}")
+  #              await process_text(update, context, recognized_text)
+  #          finally:
+  #              if os.path.exists(voice_path):
+  #                  os.remove(voice_path)
+
+   #     elif update.message.text:
+    #        text = update.message.text.lower().strip()
+   #         await process_text(update, context, text)
+
+   #     else:
+    #        await update.message.reply_text("⚠️ Message type not supported.")
+
+  #  except Exception as e:
+  #      print(f"[Main Error] {e}")
+  #      await update.message.reply_text("⚠️ A technical error occurred. Please #try again later.")
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
-        if update.message.voice:
-            file = await context.bot.get_file(update.message.voice.file_id)
-            voice_path = f"data/{update.message.voice.file_id}.ogg"
-            await file.download_to_drive(voice_path)
-            await update.message.reply_text("🎧 Recognizing speech...")
-            try:
-                recognized_text = recognize_speech(voice_path)
-                recognized_text = re.sub(r"[^\w\s]", "", recognized_text).lower().strip()
-                await update.message.reply_text(f"💤 {context.user_data.get('name', 'friend')}, you said: {recognized_text}")
-                await process_text(update, context, recognized_text)
-            finally:
-                if os.path.exists(voice_path):
-                    os.remove(voice_path)
-
-        elif update.message.text:
+        if update.message.text:
             text = update.message.text.lower().strip()
             await process_text(update, context, text)
-
         else:
-            await update.message.reply_text("⚠️ Message type not supported.")
+            await update.message.reply_text("⚠️ Message type not supported (voice temporarily disabled).")
 
     except Exception as e:
         print(f"[Main Error] {e}")
         await update.message.reply_text("⚠️ A technical error occurred. Please try again later.")
+
 
 async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     if context.user_data.get("awaiting_name"):
@@ -157,14 +169,14 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         await start(update, context)
         return
 
-    if text == ["🌤 weather forecast"]:
+    if text == "🌤 weather forecast":
         context.user_data["awaiting_city"] = True
         name = context.user_data.get("name", "friend")
         await update.message.reply_text("📍 Please specify the city to get the forecast:")
 
         return
 
-    if text == ["🗞 news", "news","/news"]:
+    if text == "🗞 news":
         await update.message.reply_text("📡 Fetching the latest news...")
         news_list = fetch_news(language="en", limit=4)  # Changed to English
         for item in news_list:
@@ -182,7 +194,7 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
 
     trigger_words = ["show", "upload", "photo", "image", "download", "picture"]
 
-    if text in ["/cinema", "movies", "watch", "cinema", "🎮 movies"]:
+    if text in ["/cinema", "movies", "watch", "🎮 Movies"]:
         await cinema_command(update, context)
         return
 
@@ -214,7 +226,7 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         await update.message.reply_text("📽 Choose the next action:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
         return
 
-    if text == "⭐ top rated movies":
+    if text == "⭐ Top Rated Movies":
         await update.message.reply_text("📊 Fetching top movies...")
         movies = get_top_movies()
         if not movies:
@@ -272,39 +284,33 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         await update.message.reply_text("🎯 Choose the next action:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
         return
 
-    
-    if text == ["🧘 relax", "/relax", "relax"]:
-        keyboard = [["🌧 Rain", "🔥 Fireplace", "🎵 Relax"], ["🔙 Main Menu"]]
+    if text == "🧘 relax":
+        keyboard = [["🌧 Rain", "🔥 Fireplace", "🎵 Relax Music"], ["🔙 Main Menu"]]
         await update.message.reply_text("🧘 Choose a relaxation mode:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
         return
 
-    if text in ["🌧 rain", "🔥 fireplace", "🎵 relax"]:
+    if text in ["🌧 Rain", "🔥 Fireplace", "🎵 Relax Music"]:
         sounds = {
-            "🌧 rain": "https://www.youtube.com/watch?v=GxE6g1fLxoo",
-            "🔥 fireplace": "https://www.youtube.com/watch?v=eyU3bRy2x44",
-            "🎵 relaxmusic": "https://www.youtube.com/watch?v=2OEL4P1Rz04"
+            "🌧 Rain": "https://www.youtube.com/watch?v=GxE6g1fLxoo",
+            "🔥 Fireplace": "https://www.youtube.com/watch?v=eyU3bRy2x44",
+            "🎵 Relax Music": "https://www.youtube.com/watch?v=2OEL4P1Rz04"
         }
         await update.message.reply_text(f"🎧 Enjoy relaxation: {sounds[text]}")
         return
 
-    if text == "🔙 main menu":
+    if text == "🔙 Main Menu":
         await start(update, context)
         return
-
 
     if text in ["ℹ️ help", "/help"]:
         await help_command(update, context)
         return
-        
-    if text in ["🗞 news", "/news"]:
-        await news_command(update, context)
-        return
 
-    if text in ["queries", "dialogue", "/gpt", "💬 queries"]:
+    if text in ["queries", "/gpt", "💬 queries"]:
         await gpt_mode(update, context)
         return
 
-    if text in ["tasks", "/plan", "design", "proposition","🗓 plan"]:
+    if text in ["tasks", "/plan", "plan", "🗓 Plan"]:
         context.user_data["awaiting_task"] = True
         await update.message.reply_text("📝 What exactly shall we plan? For example: 'Remind me in 10 minutes about the meeting'")
         return

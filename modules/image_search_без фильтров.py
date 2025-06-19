@@ -9,12 +9,6 @@ load_dotenv()
 PIXABAY_API_KEY = os.getenv("PIXABAY_API_KEY")
 UNSPLASH_ACCESS_KEY = os.getenv("UNSPLASH_ACCESS_KEY")
 
-# 🚫 Restricted keywords to block inappropriate content
-RESTRICTED_KEYWORDS = [
-    "nude", "sex", "porn", "blood", "violence", "kill",
-    "child abuse", "pedo", "molest", "rape", "explosive", "bomb", "detonator", "terror"
-]
-
 # 🧼 Clean input query from extra words and punctuation
 def clean_query(text):
     stopwords = ["show", "download", "photo", "image", "picture"]
@@ -54,13 +48,6 @@ def get_image_url(raw_query):
     try:
         cleaned_query = clean_query(raw_query)
         translated_query = translate_to_english(cleaned_query)
-
-        # 🚫 Check for restricted keywords
-        for word in RESTRICTED_KEYWORDS:
-            if word in translated_query:
-                return "⚠️ This request contains restricted content and cannot be processed."
-
-        print(f"[ImageSearch] Query: {translated_query}")
 
         image_url = search_unsplash(translated_query)
         if image_url:
