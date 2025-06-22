@@ -5,12 +5,13 @@ python-dotenv
 nest_asyncio
 apscheduler
 requests
-git+https://github.com/openai/whisper.git
 torch
 ffmpeg-python
+faster-whisper
 deep-translator
 feedparser
-faster-whisper
+# опціонально: тільки якщо ти ще використовуєш офіційний whisper
+# whisper @ git+https://github.com/openai/whisper.git
 
 
 
