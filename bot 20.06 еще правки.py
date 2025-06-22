@@ -15,8 +15,8 @@ from telegram.ext import (
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from modules.voice_recognizer import recognize_speech
-#from modules.voice_recognizer import recognize_with_faster_whisper
+#from modules.voice_recognizer import recognize_speech
+from modules.whisper_api import recognize_with_openai
 
 from modules.gpt_handler import ask_gpt
 from modules.image_search import get_image_url
@@ -29,7 +29,6 @@ from modules.news_fetcher import fetch_news  # &lt;--- ADDED
 
 nest_asyncio.apply()
 load_dotenv()
-os.environ["KMP_DUPLICATE_LIB_OK"] = os.getenv("KMP_DUPLICATE_LIB_OK", "FALSE")
 
 TOKEN = os.getenv("TOKEN")
 
@@ -128,22 +127,20 @@ async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if update.message.voice:
-           file = await context.bot.get_file(update.message.voice.file_id)
-           voice_path = f"data/{update.message.voice.file_id}.ogg"
-           await file.download_to_drive(voice_path)
-           await update.message.reply_text("🎧 Recognizing speech...")
-           try:
-               lang = context.user_data.get("lang", "en")
-               recognized_text = await recognize_speech(voice_path, language=lang)
-               #recognized_text = await recognize_with_faster_whisper(voice_path, language=lang)
+            file = await context.bot.get_file(update.message.voice.file_id)
+            voice_path = f"data/{update.message.voice.file_id}.ogg"
+            await file.download_to_drive(voice_path)
+            await update.message.reply_text("🎧 Recognizing speech...")
+            try:
+                #recognized_text = recognize_speech(voice_path)
+                recognized_text = await recognize_with_openai(voice_path)
 
-               recognized_text = re.sub(r"[^\w\s]", "", recognized_text).lower().strip()
-               await update.message.reply_text(f"💤 {context.user_data.get('name', 'friend')}, you said: {recognized_text}")
-               await process_text(update, context, recognized_text)
-           finally:
-               if os.path.exists(voice_path):
-                   os.remove(voice_path)
-                
+                recognized_text = re.sub(r"[^\w\s]", "", recognized_text).lower().strip()
+                await update.message.reply_text(f"💤 {context.user_data.get('name', 'friend')}, you said: {recognized_text}")
+                await process_text(update, context, recognized_text)
+            finally:
+                if os.path.exists(voice_path):
+                    os.remove(voice_path)
 
         elif update.message.text:
             text = update.message.text.lower().strip()

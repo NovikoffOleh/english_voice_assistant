@@ -10,6 +10,9 @@ torch
 ffmpeg-python
 deep-translator
 feedparser
+faster-whisper
+
+
 
 
 
