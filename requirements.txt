@@ -10,6 +10,8 @@ ffmpeg-python
 faster-whisper
 deep-translator
 feedparser
+langdetect==1.0.9
+
 # опціонально: тільки якщо ти ще використовуєш офіційний whisper
 # whisper @ git+https://github.com/openai/whisper.git
 
