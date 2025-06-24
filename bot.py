@@ -16,8 +16,6 @@ from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from modules.voice_recognizer import recognize_speech
-#from modules.voice_recognizer import recognize_with_faster_whisper
-
 from modules.gpt_handler import ask_gpt
 from modules.image_search import get_image_url
 from cinema.movie_search import search_movie, get_top_movies, get_top_by_genre
