@@ -1,4 +1,4 @@
-python-telegram-bot==20.7
+python-telegram-bot==20.6
 openai
 Pillow
 python-dotenv
@@ -7,13 +7,12 @@ apscheduler
 requests
 torch
 ffmpeg-python
-faster-whisper
 deep-translator
 feedparser
-langdetect==1.0.9
+faster-whisper
+langdetect
 
-# опціонально: тільки якщо ти ще використовуєш офіційний whisper
-# whisper @ git+https://github.com/openai/whisper.git
+
 
 
 
