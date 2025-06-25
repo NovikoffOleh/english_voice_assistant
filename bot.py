@@ -374,7 +374,7 @@ async def main():
     scheduler.add_job(run_send_mood, CronTrigger(hour=8, minute=0))
     scheduler.add_job(run_send_mood, CronTrigger(hour=12, minute=0))
     scheduler.add_job(run_send_mood, CronTrigger(hour=16, minute=0))
-    scheduler.add_job(run_send_mood, CronTrigger(hour=20, minute=0))  # test
+    scheduler.add_job(run_send_mood, CronTrigger(hour=19, minute=0))  # test
     scheduler.start()
 
     print("🟢 Bot is running. Open Telegram and type /start")
