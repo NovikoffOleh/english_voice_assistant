@@ -12,6 +12,7 @@ feedparser
 faster-whisper
 langdetect
 pytz
+timezonefinder
 
 
 
