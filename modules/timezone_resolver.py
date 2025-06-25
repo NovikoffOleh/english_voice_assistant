@@ -3,7 +3,6 @@ from timezonefinder import TimezoneFinder
 
 def get_timezone(city_name: str) -> str | None:
 
-
     """
     Визначає часовий пояс (timezone) за назвою міста.
 
