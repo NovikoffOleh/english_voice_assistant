@@ -57,21 +57,30 @@ def clean_query(text):
     cleaned = " ".join(filtered)
     return re.sub(r"[^\w\s]", "", cleaned)
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name")
-    user = update.effective_user
-    await update.message.reply_text(f"👋 Hello {user.first_name}! Before we begin, please tell me the name of your city to set your time zone (e.g., London, New York, Kyiv):")
-    context.user_data["awaiting_timezone"] = True
-    
+    timezone_str = context.user_data.get("timezone")
+
     keyboard = [
         ["💬 Queries", "🎮 Movies"],
         ["🗓 Plan", "🧘 Relax"],
-        ["🌤 Weather Forecast", "🗞 News"],  # &lt;--- ADDED
+        ["🌤 Weather Forecast", "🗞 News"],
         ["ℹ️ Help"]
     ]
 
-    now = datetime.now().hour
+    # Визначаємо локальний час, якщо timezone є
+    if timezone_str:
+        try:
+            tz = pytz.timezone(timezone_str)
+            now = datetime.now(tz).hour
+        except Exception as e:
+            print(f"[start] Timezone error: {e}")
+            now = datetime.now().hour
+    else:
+        now = datetime.now().hour
 
+    # Привітання по часу
     if 5 <= now < 12:
         greeting_time = "🌅 Good morning"
     elif 12 <= now < 18:
@@ -81,19 +90,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         greeting_time = "🌙 Good night"
 
-    if name:
+    # Якщо ім'я є – показує головне меню
+    if name and timezone_str:
         greeting = (
-            f"{greeting_time}\n"
-            f"{name}!\n"
+            f"{greeting_time}, {name}!\n"
             "I am LUMO - your personal assistant for all your needs.\n"
             "I can answer queries, find photos, remind you of appointments, and plan your day.\n"
             "Just say or type: 'Show me a cat', 'Remind me to take my medicine in 5 minutes', and I'll do it.\n"
             "All commands: /help"
         )
         await update.message.reply_text(greeting, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+
+    # Якщо ім'я є, але немає timezone → запитуємо місто
+    elif name and not timezone_str:
+        await update.message.reply_text(f"📍 {name}, to personalize my schedule, please tell me your city (e.g., London, Kyiv):")
+        context.user_data["awaiting_city"] = True
+
+    # Якщо ще немає імені → запитуємо ім’я
     else:
         await update.message.reply_text(f"{greeting_time}! 🤓 What is your name?")
         context.user_data["awaiting_name"] = True
+
 
 async def cinema_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -131,23 +148,40 @@ async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"🔄  {name}, query mode is activated — you can ask questions or search for images.")
 
+from modules.timezone_resolver import get_timezone
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
+    text = update.message.text.strip()
+    chat_id = update.effective_chat.id
 
-    # Якщо чекаємо назву міста
-    if context.user_data.get("awaiting_timezone"):
-        city = text.strip()
-        tz = get_timezone(city)
-
-        if tz:
-            context.user_data["timezone"] = tz
-            context.user_data["awaiting_timezone"] = False
-            await update.message.reply_text(f"✅ Time zone set to: {tz}")
-        else:
-            await update.message.reply_text("❌ Sorry, I couldn't find that city. Please try again:")
+    # 1. Очікуємо ім’я
+    if context.user_data.get("awaiting_name"):
+        context.user_data["name"] = text
+        context.user_data["awaiting_name"] = False
+        await update.message.reply_text(f"Nice to meet you, {text}! 😊 Now tell me your city (e.g., London, Kyiv):")
+        context.user_data["awaiting_city"] = True
         return
 
-    # ... далі твоя логіка розпізнавання фраз і т.д.
+    # 2. Очікуємо місто
+    if context.user_data.get("awaiting_city"):
+        city = text
+        timezone = get_timezone(city)
+        if timezone:
+            context.user_data["city"] = city
+            context.user_data["timezone"] = timezone
+            context.user_data["awaiting_city"] = False
+            await update.message.reply_text(
+                f"✅ Got it! I’ll adjust reminders to your timezone: *{timezone}*",
+                parse_mode="Markdown"
+            )
+            await start(update, context)  # Повертаємось до стартового меню
+        else:
+            await update.message.reply_text("⚠️ Sorry, I couldn’t detect the timezone for that city. Try again:")
+        return
+
+    # 3. Якщо звичайне повідомлення — передаємо далі
+    name = context.user_data.get("name", "friend")
+    await update.message.reply_text(f"🤖 {name}, I received: \"{text}\" — but I don't recognize this command yet.\nTry /help.")
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
