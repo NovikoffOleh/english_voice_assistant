@@ -24,10 +24,6 @@ from Plan.planner import parse_task_request, parse_absolute_time_request
 from Plan.timer_manager import schedule_reminder
 from modules.mood_checker import send_mood_request, handle_mood_callback
 from modules.news_fetcher import fetch_news  # &lt;--- ADDED
-from modules.timezone_resolver import get_timezone
-from pytz import timezone as pytz_timezone
-import pytz
-
 
 nest_asyncio.apply()
 load_dotenv()
@@ -59,10 +55,6 @@ def clean_query(text):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name")
-    user = update.effective_user
-    await update.message.reply_text(f"👋 Hello {user.first_name}! Before we begin, please tell me the name of your city to set your time zone (e.g., London, New York, Kyiv):")
-    context.user_data["awaiting_timezone"] = True
-    
     keyboard = [
         ["💬 Queries", "🎮 Movies"],
         ["🗓 Plan", "🧘 Relax"],
@@ -130,25 +122,6 @@ async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["awaiting_task"] = False
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"🔄  {name}, query mode is activated — you can ask questions or search for images.")
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-
-    # Якщо чекаємо назву міста
-    if context.user_data.get("awaiting_timezone"):
-        city = text.strip()
-        tz = get_timezone(city)
-
-        if tz:
-            context.user_data["timezone"] = tz
-            context.user_data["awaiting_timezone"] = False
-            await update.message.reply_text(f"✅ Time zone set to: {tz}")
-        else:
-            await update.message.reply_text("❌ Sorry, I couldn't find that city. Please try again:")
-        return
-
-    # ... далі твоя логіка розпізнавання фраз і т.д.
-
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
