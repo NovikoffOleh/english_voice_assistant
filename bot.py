@@ -55,15 +55,18 @@ def clean_query(text):
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name")
+    timezone = context.user_data.get("timezone")  # Чи вже є timezone
+
     keyboard = [
         ["💬 Queries", "🎮 Movies"],
         ["🗓 Plan", "🧘 Relax"],
-        ["🌤 Weather Forecast", "🗞 News"],  # &lt;--- ADDED
+        ["🌤 Weather Forecast", "🗞 News"],
         ["ℹ️ Help"]
     ]
 
     now = datetime.now().hour
 
+    # Привітання по часу
     if 5 <= now < 12:
         greeting_time = "🌅 Good morning"
     elif 12 <= now < 18:
@@ -73,7 +76,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         greeting_time = "🌙 Good night"
 
-    if name:
+    # Якщо вже знаємо ім’я і таймзону — показуємо меню
+    if name and timezone:
         greeting = (
             f"{greeting_time}\n"
             f"{name}!\n"
@@ -83,9 +87,17 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "All commands: /help"
         )
         await update.message.reply_text(greeting, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+
+    # Якщо є ім’я, але ще немає міста — питаємо його
+    elif name and not timezone:
+        await update.message.reply_text("📍 What city are you in? (For time zone setup)")
+        context.user_data["awaiting_city"] = True
+
+    # Якщо немає імені — запитуємо ім’я
     else:
         await update.message.reply_text(f"{greeting_time}! 🤓 What is your name?")
         context.user_data["awaiting_name"] = True
+
 
 async def cinema_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
