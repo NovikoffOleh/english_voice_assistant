@@ -151,37 +151,63 @@ async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
 from modules.timezone_resolver import get_timezone
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text.strip()
-    chat_id = update.effective_chat.id
+    text = update.message.text
+    chat_id = update.message.chat_id
 
-    # 1. Очікуємо ім’я
+    # Введення імені
     if context.user_data.get("awaiting_name"):
         context.user_data["name"] = text
         context.user_data["awaiting_name"] = False
-        await update.message.reply_text(f"Nice to meet you, {text}! 😊 Now tell me your city (e.g., London, Kyiv):")
+        await update.message.reply_text(f"Nice to meet you, {text} 😊")
+        await update.message.reply_text(f"📍 {text}, to personalize my schedule, please tell me your city (e.g., London, Kyiv):")
         context.user_data["awaiting_city"] = True
         return
 
-    # 2. Очікуємо місто
+    # Введення міста
     if context.user_data.get("awaiting_city"):
-        city = text
-        timezone = get_timezone(city)
-        if timezone:
-            context.user_data["city"] = city
-            context.user_data["timezone"] = timezone
-            context.user_data["awaiting_city"] = False
-            await update.message.reply_text(
-                f"✅ Got it! I’ll adjust reminders to your timezone: *{timezone}*",
-                parse_mode="Markdown"
-            )
-            await start(update, context)  # Повертаємось до стартового меню
-        else:
-            await update.message.reply_text("⚠️ Sorry, I couldn’t detect the timezone for that city. Try again:")
+        context.user_data["city"] = text
+        context.user_data["awaiting_city"] = False
+        context.user_data["timezone"] = text  # Поки так — потім підключимо реальну timezone по API
+        weather = await get_weather(text)
+        if weather:
+            await update.message.reply_text(weather)
+        await start(update, context)
         return
 
-    # 3. Якщо звичайне повідомлення — передаємо далі
-    name = context.user_data.get("name", "friend")
-    await update.message.reply_text(f"🤖 {name}, I received: \"{text}\" — but I don't recognize this command yet.\nTry /help.")
+    # Планування
+    if "remind" in text.lower() or "meeting" in text.lower():
+        result = parse_absolute_time_request(text)
+        if result:
+            task_text, scheduled_time = result
+            schedule_reminder(context, chat_id, task_text, scheduled_time)
+            await update.message.reply_text(f"✅ Reminder set for: {task_text} at {scheduled_time.strftime('%H:%M')}")
+            return
+        else:
+            result = parse_task_request(text)
+            if result:
+                task_text, delay = result
+                schedule_reminder(context, chat_id, task_text, datetime.now() + delay)
+                await update.message.reply_text(f"✅ Reminder will be in {delay.seconds // 60} minutes")
+                return
+
+    # Окремий запит до погоди
+    if "weather" in text.lower():
+        city = context.user_data.get("city", "Kyiv")
+        weather = await get_weather(city)
+        if weather:
+            await update.message.reply_text(weather)
+            return
+
+    # Запит до GPT
+    if "?" in text or text.endswith("."):
+        name = context.user_data.get("name", "")
+        reply = ask_gpt(text)
+        await update.message.reply_text(reply)
+        return
+
+    # Інакше — ввічлива відповідь
+    await update.message.reply_text("🤔 I didn't understand. Try again or type /help.")
+
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
