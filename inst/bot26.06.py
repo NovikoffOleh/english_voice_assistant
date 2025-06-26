@@ -24,6 +24,10 @@ from Plan.planner import parse_task_request, parse_absolute_time_request
 from Plan.timer_manager import schedule_reminder
 from modules.mood_checker import send_mood_request, handle_mood_callback
 from modules.news_fetcher import fetch_news  # &lt;--- ADDED
+from modules.timezone_resolver import get_timezone
+from pytz import timezone as pytz_timezone
+import pytz
+
 
 nest_asyncio.apply()
 load_dotenv()
@@ -53,17 +57,30 @@ def clean_query(text):
     cleaned = " ".join(filtered)
     return re.sub(r"[^\w\s]", "", cleaned)
 
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name")
+    timezone_str = context.user_data.get("timezone")
+
     keyboard = [
         ["💬 Queries", "🎮 Movies"],
         ["🗓 Plan", "🧘 Relax"],
-        ["🌤 Weather Forecast", "🗞 News"],  # &lt;--- ADDED
+        ["🌤 Weather Forecast", "🗞 News"],
         ["ℹ️ Help"]
     ]
 
-    now = datetime.now().hour
+    # Визначаємо локальний час, якщо timezone є
+    if timezone_str:
+        try:
+            tz = pytz.timezone(timezone_str)
+            now = datetime.now(tz).hour
+        except Exception as e:
+            print(f"[start] Timezone error: {e}")
+            now = datetime.now().hour
+    else:
+        now = datetime.now().hour
 
+    # Привітання по часу
     if 5 <= now < 12:
         greeting_time = "🌅 Good morning"
     elif 12 <= now < 18:
@@ -73,19 +90,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         greeting_time = "🌙 Good night"
 
-    if name:
+    # Якщо ім'я є – показує головне меню
+    if name and timezone_str:
         greeting = (
-            f"{greeting_time}\n"
-            f"{name}!\n"
+            f"{greeting_time}, {name}!\n"
             "I am LUMO - your personal assistant for all your needs.\n"
             "I can answer queries, find photos, remind you of appointments, and plan your day.\n"
             "Just say or type: 'Show me a cat', 'Remind me to take my medicine in 5 minutes', and I'll do it.\n"
             "All commands: /help"
         )
         await update.message.reply_text(greeting, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+
+    # Якщо ім'я є, але немає timezone → запитуємо місто
+    elif name and not timezone_str:
+        await update.message.reply_text(f"📍 {name}, to personalize my schedule, please tell me your city (e.g., London, Kyiv):")
+        context.user_data["awaiting_city"] = True
+
+    # Якщо ще немає імені → запитуємо ім’я
     else:
         await update.message.reply_text(f"{greeting_time}! 🤓 What is your name?")
         context.user_data["awaiting_name"] = True
+
 
 async def cinema_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -122,6 +147,68 @@ async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["awaiting_task"] = False
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"🔄  {name}, query mode is activated — you can ask questions or search for images.")
+
+from modules.timezone_resolver import get_timezone
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    chat_id = update.message.chat_id
+
+    # Введення імені
+    if context.user_data.get("awaiting_name"):
+        context.user_data["name"] = text
+        context.user_data["awaiting_name"] = False
+        await update.message.reply_text(f"Nice to meet you, {text} 😊")
+        await update.message.reply_text(f"📍 {text}, to personalize my schedule, please tell me your city (e.g., London, Kyiv):")
+        context.user_data["awaiting_city"] = True
+        return
+
+    # Введення міста
+    if context.user_data.get("awaiting_city"):
+        context.user_data["city"] = text
+        context.user_data["awaiting_city"] = False
+        context.user_data["timezone"] = text  # Поки так — потім підключимо реальну timezone по API
+        weather = await get_weather(text)
+        if weather:
+            await update.message.reply_text(weather)
+        await start(update, context)
+        return
+
+    # Планування
+    if "remind" in text.lower() or "meeting" in text.lower():
+        result = parse_absolute_time_request(text)
+        if result:
+            task_text, scheduled_time = result
+            schedule_reminder(context, chat_id, task_text, scheduled_time)
+            await update.message.reply_text(f"✅ Reminder set for: {task_text} at {scheduled_time.strftime('%H:%M')}")
+            return
+        else:
+            result = parse_task_request(text)
+            if result:
+                task_text, delay = result
+                schedule_reminder(context, chat_id, task_text, datetime.now() + delay)
+                await update.message.reply_text(f"✅ Reminder will be in {delay.seconds // 60} minutes")
+                return
+
+    # Окремий запит до погоди
+    if "weather" in text.lower():
+        city = context.user_data.get("city", "Kyiv")
+        weather = await get_weather(city)
+        if weather:
+            await update.message.reply_text(weather)
+            return
+
+    # Запит до GPT
+    if "?" in text or text.endswith("."):
+        name = context.user_data.get("name", "")
+        reply = ask_gpt(text)
+        await update.message.reply_text(reply)
+        return
+
+    # Інакше — ввічлива відповідь
+    await update.message.reply_text("🤔 I didn't understand. Try again or type /help.")
+
+
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
