@@ -1,3 +1,5 @@
+# modules/mood_checker.py
+
 from datetime import datetime
 from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton
 from telegram.ext import ContextTypes
@@ -40,13 +42,9 @@ async def send_mood_request(app):
     for user_id, data in app.user_data.items():
         name = data.get("name", "friend")
         try:
-            # Mood prompt + water reminder
             await app.bot.send_message(
                 chat_id=user_id,
-                text=(
-                    f"👀 Hey {name}, how are you feeling? Choose an emoji:\n\n"
-                    f"💧 Don't forget to drink 300 ml of water!"
-                ),
+                text=f"👀 Hey {name}, how are you feeling? Choose an emoji:",
                 reply_markup=get_mood_keyboard()
             )
         except Exception as e:
