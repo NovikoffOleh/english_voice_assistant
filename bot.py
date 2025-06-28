@@ -69,12 +69,12 @@ def is_key_used(key: str) -> bool:
     return key in used
 
 # ========== START КОМАНДА ================
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if is_user_activated(user_id):
-        await update.message.reply_text("✅ Ви вже активували доступ. Можете користуватись ботом.")
-        return
-    await update.message.reply_text("🔐 Введіть код доступу для активації:")
+#async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+#    user_id = update.effective_user.id
+ #   if is_user_activated(user_id):
+ #       await update.message.reply_text("✅ You have already activated access. You can use the bot")
+#        return
+ #   await update.message.reply_text("🔐 Enter the access code to activate:")
 
 # ========== ОБРОБКА ПАРОЛІВ ===============
 async def handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -86,23 +86,23 @@ async def handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if text == ADMIN_SECRET:
         activate_user(user_id)
-        await update.message.reply_text("🛡 Ви увійшли як адміністратор.")
+        await update.message.reply_text("🛡 You are logged in as an administrator")
     elif text in GIFT_KEYS:
         if is_key_used(text):
-            await update.message.reply_text("❌ Цей код вже був використаний.")
+            await update.message.reply_text("❌ This code has already been used")
         else:
             activate_user(user_id)
             mark_key_as_used(text)
-            await update.message.reply_text("🎁 Доступ активовано. Насолоджуйтесь ботом!")
+            await update.message.reply_text("🎁 Access activated. Enjoy the bot!")
     else:
-        await update.message.reply_text("🚫 Неправильний код. Спробуйте ще раз.")
+        await update.message.reply_text("🚫 Incorrect code. Please try again")
 
 # ========= ДЕКОРАТОР ДЛЯ ПЕРЕВІРКИ ДОСТУПУ ==========
 def restricted(func):
     async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_id = update.effective_user.id
         if not is_user_activated(user_id):
-            await update.message.reply_text("🔐 Введіть код доступу для активації перед використанням бота.")
+            await update.message.reply_text("🔐 Enter the access code to activate before using the bot")
             return
         return await func(update, context)
     return wrapper
@@ -135,6 +135,12 @@ def clean_query(text):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if not is_user_activated(user_id):
+        await update.message.reply_text("🔐 Enter the access code to activate:")
+        return
+    
+    
     name = context.user_data.get("name")
     keyboard = [
         ["💬 Queries", "🎮 Movies"],
@@ -443,6 +449,7 @@ from apscheduler.triggers.cron import CronTrigger
 from modules.mood_checker import send_mood_request, handle_mood_callback
 
 async def main():
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_password))
     app = ApplicationBuilder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
@@ -451,7 +458,7 @@ async def main():
     app.add_handler(CommandHandler("gpt", gpt_mode))
     app.add_handler(MessageHandler(filters.TEXT | filters.VOICE, handle_message))
     app.add_handler(CallbackQueryHandler(handle_mood_callback, pattern=r"^mood_"))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_password))
+    
 
 
     # 🧠 Mood request async wrapper function
