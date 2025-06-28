@@ -77,25 +77,24 @@ def is_key_used(key: str) -> bool:
  #   await update.message.reply_text("🔐 Enter the access code to activate:")
 
 # ========== ОБРОБКА ПАРОЛІВ ===============
-async def handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def handle_activation_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    text = update.message.text.strip()
+    text = update.message.text.strip().lower()
 
-    if is_user_activated(user_id):
-        return  # вже активований, обробка відбувається в інших хендлерах
+    GIFT_KEYS = [key.lower().strip() for key in os.getenv("GIFT_KEYS", "").split(",")]
+    ADMIN_SECRET = os.getenv("ADMIN_SECRET", "").lower().strip()
 
-    if text == ADMIN_SECRET:
+    if text in GIFT_KEYS:
         activate_user(user_id)
-        await update.message.reply_text("🛡 You are logged in as an administrator")
-    elif text in GIFT_KEYS:
-        if is_key_used(text):
-            await update.message.reply_text("❌ This code has already been used")
-        else:
-            activate_user(user_id)
-            mark_key_as_used(text)
-            await update.message.reply_text("🎁 Access activated. Enjoy the bot!")
+        await update.message.reply_text("✅ Access granted! Welcome aboard!")
+        await start(update, context)
+    elif text == ADMIN_SECRET:
+        activate_user(user_id)
+        await update.message.reply_text("🛡 Admin access granted!")
+        await start(update, context)
     else:
-        await update.message.reply_text("🚫 Incorrect code. Please try again")
+        await update.message.reply_text("❌ Invalid code. Please try again.")
+
 
 # ========= ДЕКОРАТОР ДЛЯ ПЕРЕВІРКИ ДОСТУПУ ==========
 def restricted(func):
@@ -449,15 +448,24 @@ from apscheduler.triggers.cron import CronTrigger
 from modules.mood_checker import send_mood_request, handle_mood_callback
 
 async def main():
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_password))
     app = ApplicationBuilder().token(TOKEN).build()
+
+    # 1. Активація — лише до доступу
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_password))
+
+    # 2. Команди
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("plan", plan_command))
     app.add_handler(CommandHandler("cinema", cinema_command))
     app.add_handler(CommandHandler("gpt", gpt_mode))
-    app.add_handler(MessageHandler(filters.TEXT | filters.VOICE, handle_message))
+
+    # 3. Callback-и
     app.add_handler(CallbackQueryHandler(handle_mood_callback, pattern=r"^mood_"))
+
+    # 4. Основна логіка
+    app.add_handler(MessageHandler(filters.TEXT | filters.VOICE, handle_message))
+
     
 
 
