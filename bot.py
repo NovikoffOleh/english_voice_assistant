@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import asyncio
 import nest_asyncio
 from datetime import datetime
@@ -27,9 +28,87 @@ from modules.news_fetcher import fetch_news  # &lt;--- ADDED
 
 nest_asyncio.apply()
 load_dotenv()
+TOKEN = os.getenv("TOKEN")
+ADMIN_SECRET = os.getenv("ADMIN_SECRET")
+GIFT_KEYS = os.getenv("GIFT_KEYS", "").split(",")
+
+USED_KEYS_FILE = "used_gift_keys.json"
+ACTIVATED_USERS_FILE = "activated_users.json"
+
+# ======== ІНІЦІАЛІЗАЦІЯ ФАЙЛІВ ===========
+if not os.path.exists(USED_KEYS_FILE):
+    with open(USED_KEYS_FILE, "w") as f:
+        json.dump([], f)
+
+if not os.path.exists(ACTIVATED_USERS_FILE):
+    with open(ACTIVATED_USERS_FILE, "w") as f:
+        json.dump([], f)
+
+def is_user_activated(user_id: int) -> bool:
+    with open(ACTIVATED_USERS_FILE) as f:
+        activated = json.load(f)
+    return user_id in activated
+
+def activate_user(user_id: int):
+    with open(ACTIVATED_USERS_FILE) as f:
+        activated = json.load(f)
+    activated.append(user_id)
+    with open(ACTIVATED_USERS_FILE, "w") as f:
+        json.dump(activated, f)
+
+def mark_key_as_used(key: str):
+    with open(USED_KEYS_FILE) as f:
+        used = json.load(f)
+    used.append(key)
+    with open(USED_KEYS_FILE, "w") as f:
+        json.dump(used, f)
+
+def is_key_used(key: str) -> bool:
+    with open(USED_KEYS_FILE) as f:
+        used = json.load(f)
+    return key in used
+
+# ========== START КОМАНДА ================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if is_user_activated(user_id):
+        await update.message.reply_text("✅ Ви вже активували доступ. Можете користуватись ботом.")
+        return
+    await update.message.reply_text("🔐 Введіть код доступу для активації:")
+
+# ========== ОБРОБКА ПАРОЛІВ ===============
+async def handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    text = update.message.text.strip()
+
+    if is_user_activated(user_id):
+        return  # вже активований, обробка відбувається в інших хендлерах
+
+    if text == ADMIN_SECRET:
+        activate_user(user_id)
+        await update.message.reply_text("🛡 Ви увійшли як адміністратор.")
+    elif text in GIFT_KEYS:
+        if is_key_used(text):
+            await update.message.reply_text("❌ Цей код вже був використаний.")
+        else:
+            activate_user(user_id)
+            mark_key_as_used(text)
+            await update.message.reply_text("🎁 Доступ активовано. Насолоджуйтесь ботом!")
+    else:
+        await update.message.reply_text("🚫 Неправильний код. Спробуйте ще раз.")
+
+# ========= ДЕКОРАТОР ДЛЯ ПЕРЕВІРКИ ДОСТУПУ ==========
+def restricted(func):
+    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
+        user_id = update.effective_user.id
+        if not is_user_activated(user_id):
+            await update.message.reply_text("🔐 Введіть код доступу для активації перед використанням бота.")
+            return
+        return await func(update, context)
+    return wrapper
 os.environ["KMP_DUPLICATE_LIB_OK"] = os.getenv("KMP_DUPLICATE_LIB_OK", "FALSE")
 
-TOKEN = os.getenv("TOKEN")
+
 
 GENRE_MAP = {
     "thriller": 53,
@@ -52,7 +131,9 @@ def clean_query(text):
     filtered = [word for word in words if word not in stopwords]
     cleaned = " ".join(filtered)
     return re.sub(r"[^\w\s]", "", cleaned)
+    
 
+@restricted
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name")
     keyboard = [
@@ -87,6 +168,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"{greeting_time}! 🤓 What is your name?")
         context.user_data["awaiting_name"] = True
 
+@restricted
 async def cinema_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["🔍 Search for a movie"],
@@ -97,6 +179,7 @@ async def cinema_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"🍿 {name}, choose an action:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
 
+@restricted
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name", "friend")
     help_text = (
@@ -113,16 +196,19 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(help_text)
 
+@restricted
 async def plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["awaiting_task"] = True
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"📝  {name}, what shall we plan? For example: 'Remind me in 10 minutes about the meeting'")
 
+@restricted
 async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["awaiting_task"] = False
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"🔄  {name}, query mode is activated — you can ask questions or search for images.")
 
+@restricted
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if update.message.voice:
@@ -154,6 +240,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"[Main Error] {e}")
         await update.message.reply_text("⚠️ A technical error occurred. Please try again later.")
 
+@restricted
 async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     if context.user_data.get("awaiting_name"):
         context.user_data["name"] = text.title()
@@ -364,6 +451,8 @@ async def main():
     app.add_handler(CommandHandler("gpt", gpt_mode))
     app.add_handler(MessageHandler(filters.TEXT | filters.VOICE, handle_message))
     app.add_handler(CallbackQueryHandler(handle_mood_callback, pattern=r"^mood_"))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_password))
+
 
     # 🧠 Mood request async wrapper function
     async def run_send_mood():
