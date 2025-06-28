@@ -133,7 +133,7 @@ def clean_query(text):
     return re.sub(r"[^\w\s]", "", cleaned)
     
 
-@restricted
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name")
     keyboard = [
