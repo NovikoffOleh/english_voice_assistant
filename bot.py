@@ -16,7 +16,6 @@ from telegram.ext import (
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-
 from modules.voice_recognizer import recognize_speech
 from modules.gpt_handler import ask_gpt
 from modules.image_search import get_image_url
@@ -25,82 +24,80 @@ from modules.weather import get_weather
 from Plan.planner import parse_task_request, parse_absolute_time_request
 from Plan.timer_manager import schedule_reminder
 from modules.mood_checker import send_mood_request, handle_mood_callback
-from modules.news_fetcher import fetch_news
+from modules.news_fetcher import fetch_news  # &lt;--- ADDED
 
 nest_asyncio.apply()
 load_dotenv()
-TOKEN = os.getenv("TOKEN")
 ADMIN_SECRET = os.getenv("ADMIN_SECRET")
 GIFT_KEYS = os.getenv("GIFT_KEYS", "").split(",")
 
-USED_KEYS_FILE = "used_gift_keys.json"
-ACTIVATED_USERS_FILE = "activated_users.json"
+USED_KEYS_FILE = "keys/used_keys.json"
+ADMIN_IDS = []
 
-# === AUTH ===
-
-def load_json(filename):
-    try:
-        with open(filename, "r") as f:
+# Завантажені ключі
+def load_used_keys():
+    if os.path.exists(USED_KEYS_FILE):
+        with open(USED_KEYS_FILE, "r") as f:
             return json.load(f)
-    except FileNotFoundError:
-        return []
+    return {}
 
-def save_json(filename, data):
-    with open(filename, "w") as f:
+def save_used_keys(data):
+    with open(USED_KEYS_FILE, "w") as f:
         json.dump(data, f)
+        
+from telegram.ext import CommandHandler
 
-def is_user_activated(user_id):
-    activated_users = load_json(ACTIVATED_USERS_FILE)
-    return user_id in activated_users
+used_keys = load_used_keys()
 
-def activate_user(user_id):
-    activated_users = load_json(ACTIVATED_USERS_FILE)
-    if user_id not in activated_users:
-        activated_users.append(user_id)
-        save_json(ACTIVATED_USERS_FILE, activated_users)
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if len(context.args) != 1:
+        await update.message.reply_text("❌ Usage: /admin YOUR_SECRET_CODE")
+        return
 
-def is_key_used(key):
-    used_keys = load_json(USED_KEYS_FILE)
-    return key in used_keys
-
-def mark_key_as_used(key):
-    used_keys = load_json(USED_KEYS_FILE)
-    if key not in used_keys:
-        used_keys.append(key)
-        save_json(USED_KEYS_FILE, used_keys)
-
-async def handle_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    entered_code = context.args[0]
     user_id = update.effective_user.id
-    text = update.message.text.strip()
 
-    if is_user_activated(user_id):
-        return  # вже активований
-
-    if text == ADMIN_SECRET:
-        activate_user(user_id)
-        await update.message.reply_text("🛡 You are logged in as admin.")
-    elif text in GIFT_KEYS:
-        if is_key_used(text):
-            await update.message.reply_text("❌ This code has already been used.")
-        else:
-            activate_user(user_id)
-            mark_key_as_used(text)
-            await update.message.reply_text("🎁 Access granted. Enjoy the bot!")
+    if entered_code == ADMIN_SECRET:
+        if user_id not in ADMIN_IDS:
+            ADMIN_IDS.append(user_id)
+        await update.message.reply_text("✅ You are now an admin.")
     else:
-        await update.message.reply_text("🚫 Invalid access code. Try again.")
+        await update.message.reply_text("❌ Wrong secret code.")
 
-# ========= ДЕКОРАТОР ДЛЯ ПЕРЕВІРКИ ДОСТУПУ ==========
-def restricted(func):
-    async def wrapper(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = update.effective_user.id
-        if not is_user_activated(user_id):
-            await update.message.reply_text("🔐 Enter the access code to activate before using the bot")
-            return
-        return await func(update, context)
-    return wrapper
+application.add_handler(CommandHandler("admin", admin_command))
+
+
+async def activate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    # Admins already have access
+    if user_id in ADMIN_IDS:
+        await update.message.reply_text("✅ You are already an admin.")
+        return
+
+    if len(context.args) != 1:
+        await update.message.reply_text("❌ Usage: /activate YOUR_KEY")
+        return
+
+    entered_key = context.args[0]
+
+    if entered_key in used_keys.values():
+        await update.message.reply_text("❌ This key has already been used.")
+        return
+
+    if entered_key in GIFT_KEYS:
+        used_keys[str(user_id)] = entered_key
+        save_used_keys(used_keys)
+        await update.message.reply_text("🎁 Activation successful! You now have access.")
+    else:
+        await update.message.reply_text("❌ Invalid key.")
+
+application.add_handler(CommandHandler("activate", activate_command))
+
+
 os.environ["KMP_DUPLICATE_LIB_OK"] = os.getenv("KMP_DUPLICATE_LIB_OK", "FALSE")
 
-
+TOKEN = os.getenv("TOKEN")
 
 GENRE_MAP = {
     "thriller": 53,
@@ -127,12 +124,6 @@ def clean_query(text):
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not is_user_activated(user_id):
-        await update.message.reply_text("🔐 Enter the access code to activate:")
-        return
-    
-    
     name = context.user_data.get("name")
     keyboard = [
         ["💬 Queries", "🎮 Movies"],
@@ -166,7 +157,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"{greeting_time}! 🤓 What is your name?")
         context.user_data["awaiting_name"] = True
 
-@restricted
 async def cinema_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
         ["🔍 Search for a movie"],
@@ -177,7 +167,6 @@ async def cinema_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"🍿 {name}, choose an action:", reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
 
-@restricted
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name", "friend")
     help_text = (
@@ -194,19 +183,16 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(help_text)
 
-@restricted
 async def plan_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["awaiting_task"] = True
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"📝  {name}, what shall we plan? For example: 'Remind me in 10 minutes about the meeting'")
 
-@restricted
 async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data["awaiting_task"] = False
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"🔄  {name}, query mode is activated — you can ask questions or search for images.")
 
-@restricted
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if update.message.voice:
@@ -238,7 +224,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         print(f"[Main Error] {e}")
         await update.message.reply_text("⚠️ A technical error occurred. Please try again later.")
 
-@restricted
 async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     if context.user_data.get("awaiting_name"):
         context.user_data["name"] = text.title()
@@ -442,38 +427,31 @@ from modules.mood_checker import send_mood_request, handle_mood_callback
 
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
-
-    # 🔐 Спочатку ловимо текст, якщо користувач неактивований
-    async def route_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-        user_id = update.effective_user.id
-        if not is_user_activated(user_id):
-            await handle_password(update, context)
-        else:
-            await handle_message(update, context)
-
-    # Команди
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("plan", plan_command))
     app.add_handler(CommandHandler("cinema", cinema_command))
     app.add_handler(CommandHandler("gpt", gpt_mode))
-
-    # Кнопки mood
+    app.add_handler(MessageHandler(filters.TEXT | filters.VOICE, handle_message))
     app.add_handler(CallbackQueryHandler(handle_mood_callback, pattern=r"^mood_"))
 
-    # Основна логіка (універсальний хендлер для тексту/голосу)
-    app.add_handler(MessageHandler(filters.TEXT | filters.VOICE, route_text))
-
-    # ⏰ Планувальник настрою
+    # 🧠 Mood request async wrapper function
     async def run_send_mood():
         await send_mood_request(app)
 
+    # ⏰ Scheduler
     scheduler = AsyncIOScheduler()
     scheduler.add_job(run_send_mood, CronTrigger(hour=5, minute=0))
     scheduler.add_job(run_send_mood, CronTrigger(hour=9, minute=0))
     scheduler.add_job(run_send_mood, CronTrigger(hour=13, minute=0))
-    scheduler.add_job(run_send_mood, CronTrigger(hour=17, minute=0))
+    scheduler.add_job(run_send_mood, CronTrigger(hour=17, minute=0))  # test
     scheduler.start()
 
     print("🟢 Bot is running. Open Telegram and type /start")
     await app.run_polling()
+
+if __name__ == "__main__":
+    import nest_asyncio
+    nest_asyncio.apply()
+    asyncio.run(main())
+
