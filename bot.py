@@ -1,6 +1,5 @@
 import os
 import re
-import json
 import asyncio
 import nest_asyncio
 from datetime import datetime
@@ -28,73 +27,6 @@ from modules.news_fetcher import fetch_news  # &lt;--- ADDED
 
 nest_asyncio.apply()
 load_dotenv()
-ADMIN_SECRET = os.getenv("ADMIN_SECRET")
-GIFT_KEYS = os.getenv("GIFT_KEYS", "").split(",")
-
-USED_KEYS_FILE = "keys/used_keys.json"
-ADMIN_IDS = []
-
-# Завантажені ключі
-def load_used_keys():
-    if os.path.exists(USED_KEYS_FILE):
-        with open(USED_KEYS_FILE, "r") as f:
-            return json.load(f)
-    return {}
-
-def save_used_keys(data):
-    with open(USED_KEYS_FILE, "w") as f:
-        json.dump(data, f)
-        
-from telegram.ext import CommandHandler
-
-used_keys = load_used_keys()
-
-async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) != 1:
-        await update.message.reply_text("❌ Usage: /admin YOUR_SECRET_CODE")
-        return
-
-    entered_code = context.args[0]
-    user_id = update.effective_user.id
-
-    if entered_code == ADMIN_SECRET:
-        if user_id not in ADMIN_IDS:
-            ADMIN_IDS.append(user_id)
-        await update.message.reply_text("✅ You are now an admin.")
-    else:
-        await update.message.reply_text("❌ Wrong secret code.")
-
-application.add_handler(CommandHandler("admin", admin_command))
-
-
-async def activate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    # Admins already have access
-    if user_id in ADMIN_IDS:
-        await update.message.reply_text("✅ You are already an admin.")
-        return
-
-    if len(context.args) != 1:
-        await update.message.reply_text("❌ Usage: /activate YOUR_KEY")
-        return
-
-    entered_key = context.args[0]
-
-    if entered_key in used_keys.values():
-        await update.message.reply_text("❌ This key has already been used.")
-        return
-
-    if entered_key in GIFT_KEYS:
-        used_keys[str(user_id)] = entered_key
-        save_used_keys(used_keys)
-        await update.message.reply_text("🎁 Activation successful! You now have access.")
-    else:
-        await update.message.reply_text("❌ Invalid key.")
-
-application.add_handler(CommandHandler("activate", activate_command))
-
-
 os.environ["KMP_DUPLICATE_LIB_OK"] = os.getenv("KMP_DUPLICATE_LIB_OK", "FALSE")
 
 TOKEN = os.getenv("TOKEN")
@@ -120,8 +52,6 @@ def clean_query(text):
     filtered = [word for word in words if word not in stopwords]
     cleaned = " ".join(filtered)
     return re.sub(r"[^\w\s]", "", cleaned)
-    
-
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name")
@@ -177,7 +107,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/news — news for the hour\n"
         "/gpt — query mode\n"
         "/help — help\n"
-        #"⚠️ — tasks with time intervals like 'remind me at 8:45 PM to turn on the TV' can only be entered manually\n"
+        "⚠️ — tasks with time intervals like 'remind me at 8:45 PM to turn on the TV' can only be entered manually\n"
         "⚠️ — movie titles must be entered in English and only manually\n"
         "⚠️ — the bot accepts urgent tasks for one day\n"
     )
@@ -441,10 +371,10 @@ async def main():
 
     # ⏰ Scheduler
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(run_send_mood, CronTrigger(hour=5, minute=0))
-    scheduler.add_job(run_send_mood, CronTrigger(hour=9, minute=0))
-    scheduler.add_job(run_send_mood, CronTrigger(hour=13, minute=0))
-    scheduler.add_job(run_send_mood, CronTrigger(hour=17, minute=0))  # test
+    scheduler.add_job(run_send_mood, CronTrigger(hour=8, minute=0))
+    scheduler.add_job(run_send_mood, CronTrigger(hour=12, minute=0))
+    scheduler.add_job(run_send_mood, CronTrigger(hour=16, minute=0))
+    scheduler.add_job(run_send_mood, CronTrigger(hour=20, minute=0))  # test
     scheduler.start()
 
     print("🟢 Bot is running. Open Telegram and type /start")
