@@ -30,7 +30,48 @@ load_dotenv()
 os.environ["KMP_DUPLICATE_LIB_OK"] = os.getenv("KMP_DUPLICATE_LIB_OK", "FALSE")
 
 TOKEN = os.getenv("TOKEN")
+ADMIN_SECRET = os.getenv("ADMIN_SECRET")
+GIFT_KEYS = os.getenv("GIFT_KEYS", "").split(",")
 
+USED_KEYS_FILE = "used_keys.json"
+ACTIVATED_USERS_FILE = "activated_users.json"
+
+# Ensure used_keys.json and activated_users.json exist
+for file in [USED_KEYS_FILE, ACTIVATED_USERS_FILE]:
+    if not os.path.exists(file):
+        with open(file, "w") as f:
+            json.dump([], f)
+
+# --- Auth Logic ---
+def is_user_authorized(user_id):
+    with open(ACTIVATED_USERS_FILE, "r") as f:
+        users = json.load(f)
+    return user_id in users
+
+def mark_user_as_authorized(user_id):
+    with open(ACTIVATED_USERS_FILE, "r+") as f:
+        users = json.load(f)
+        if user_id not in users:
+            users.append(user_id)
+            f.seek(0)
+            json.dump(users, f)
+            f.truncate()
+
+def is_key_used(key):
+    with open(USED_KEYS_FILE, "r") as f:
+        used_keys = json.load(f)
+    return key in used_keys
+
+def mark_key_as_used(key):
+    with open(USED_KEYS_FILE, "r+") as f:
+        used_keys = json.load(f)
+        if key not in used_keys:
+            used_keys.append(key)
+            f.seek(0)
+            json.dump(used_keys, f)
+            f.truncate()
+
+# --- Main UI ---
 GENRE_MAP = {
     "thriller": 53,
     "detective": 9648,
@@ -53,6 +94,19 @@ def clean_query(text):
     cleaned = " ".join(filtered)
     return re.sub(r"[^\w\s]", "", cleaned)
 
+# --- START command ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    # Если пользователь не авторизован — запросить пароль
+    if not is_user_authorized(user_id):
+        await update.message.reply_text("🔒 Please enter your activation key:")
+        context.user_data["awaiting_password"] = True
+        return
+
+# Если авторизован — запуск ассистента
+    await launch_assistant(update, context)
+    
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name")
     keyboard = [
@@ -123,7 +177,34 @@ async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"🔄  {name}, query mode is activated — you can ask questions or search for images.")
 
+
+# --- MESSAGE HANDLER ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    text = update.message.text.strip() if update.message.text else ""
+
+    # Обработка пароля
+    if context.user_data.get("awaiting_password"):
+        context.user_data["awaiting_password"] = False
+
+        if text == ADMIN_SECRET:
+            mark_user_as_authorized(user_id)
+            await update.message.reply_text("✅ Admin access granted.")
+            await launch_assistant(update, context)
+            return
+
+        elif text in GIFT_KEYS and not is_key_used(text):
+            mark_key_as_used(text)
+            mark_user_as_authorized(user_id)
+            await update.message.reply_text("✅ Access granted.")
+            await launch_assistant(update, context)
+            return
+
+        else:
+            await update.message.reply_text("❌ Invalid or used key. Please try again.")
+            context.user_data["awaiting_password"] = True
+            return
+
     try:
         if update.message.voice:
            file = await context.bot.get_file(update.message.voice.file_id)
@@ -365,16 +446,12 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT | filters.VOICE, handle_message))
     app.add_handler(CallbackQueryHandler(handle_mood_callback, pattern=r"^mood_"))
 
-    # 🧠 Mood request async wrapper function
-    async def run_send_mood():
-        await send_mood_request(app)
-
     # ⏰ Scheduler
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(run_send_mood, CronTrigger(hour=8, minute=0))
-    scheduler.add_job(run_send_mood, CronTrigger(hour=12, minute=0))
-    scheduler.add_job(run_send_mood, CronTrigger(hour=16, minute=0))
-    scheduler.add_job(run_send_mood, CronTrigger(hour=20, minute=0))  # test
+    scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=8, minute=0))
+    scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=12, minute=0))
+    scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=16, minute=0))
+    scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=20, minute=0))
     scheduler.start()
 
     print("🟢 Bot is running. Open Telegram and type /start")
