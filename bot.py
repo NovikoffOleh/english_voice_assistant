@@ -437,7 +437,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from modules.mood_checker import send_mood_request, handle_mood_callback
 
-aasync def main():
+async def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_with_auth))  # ⬅️ Авторизація!
