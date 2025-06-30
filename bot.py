@@ -95,14 +95,15 @@ def clean_query(text):
     return re.sub(r"[^\w\s]", "", cleaned)
 
 # --- START command ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start_with_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
-    # Если пользователь не авторизован — запросить пароль
     if not is_user_authorized(user_id):
         await update.message.reply_text("🔒 Please enter your activation key:")
         context.user_data["awaiting_password"] = True
         return
+
+    await launch_assistant(update, context)
 
 # Если авторизован — запуск ассистента
     await launch_assistant(update, context)
@@ -436,9 +437,10 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from modules.mood_checker import send_mood_request, handle_mood_callback
 
-async def main():
+aasync def main():
     app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
+
+    app.add_handler(CommandHandler("start", start_with_auth))  # ⬅️ Авторизація!
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("plan", plan_command))
     app.add_handler(CommandHandler("cinema", cinema_command))
