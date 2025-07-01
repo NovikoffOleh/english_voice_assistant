@@ -450,11 +450,19 @@ async def main():
     app.add_handler(CallbackQueryHandler(handle_mood_callback, pattern=r"^mood_"))
 
     # ⏰ Scheduler
+    async def run_send_mood():
+        await send_mood_request(app)
+ #   scheduler = AsyncIOScheduler()
+   #  scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=8, minute=0))
+   #  scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=12, minute=0))
+    # scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=16, minute=0))
+   #  scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=20, minute=0))
+    # scheduler.start()
     scheduler = AsyncIOScheduler()
-    scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=8, minute=0))
-    scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=12, minute=0))
-    scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=16, minute=0))
-    scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=20, minute=0))
+    scheduler.add_job(run_send_mood, CronTrigger(hour=8, minute=0))
+    scheduler.add_job(run_send_mood, CronTrigger(hour=12, minute=0))
+    scheduler.add_job(run_send_mood, CronTrigger(hour=16, minute=0))
+    scheduler.add_job(run_send_mood, CronTrigger(hour=20, minute=0))
     scheduler.start()
 
     print("🟢 Bot is running. Open Telegram and type /start")
