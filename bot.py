@@ -99,6 +99,10 @@ def clean_query(text):
     return re.sub(r"[^\w\s]", "", cleaned)
 
 # --- START command ---
+async def launch_assistant(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await start(update, context)
+
+
 async def start_with_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
@@ -110,7 +114,6 @@ async def start_with_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await launch_assistant(update, context)
 
 # Если авторизован — запуск ассистента
-    await launch_assistant(update, context)
     
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name")
