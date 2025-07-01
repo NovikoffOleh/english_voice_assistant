@@ -32,6 +32,9 @@ os.environ["KMP_DUPLICATE_LIB_OK"] = os.getenv("KMP_DUPLICATE_LIB_OK", "FALSE")
 
 TOKEN = os.getenv("TOKEN")
 ADMIN_SECRET = os.getenv("ADMIN_SECRET")
+if not ADMIN_SECRET:
+    raise ValueError("❌ ADMIN_SECRET is not set. Check your .env file and reload the environment.")
+
 GIFT_KEYS = os.getenv("GIFT_KEYS", "").split(",")
 
 USED_KEYS_FILE = "used_keys.json"
