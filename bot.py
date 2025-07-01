@@ -189,6 +189,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if context.user_data.get("awaiting_password"):
         context.user_data["awaiting_password"] = False
 
+
         #if text == ADMIN_SECRET:
         if text.strip() == ADMIN_SECRET.strip():
 
