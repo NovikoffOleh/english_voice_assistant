@@ -61,6 +61,9 @@ def mark_user_as_authorized(user_id):
             f.seek(0)
             json.dump(users, f)
             f.truncate()
+            print("[DEBUG] Updating activated_users.json")
+            print("[DEBUG] User added:", user_id)
+
 
 def is_key_used(key):
     with open(USED_KEYS_FILE, "r") as f:
@@ -75,6 +78,9 @@ def mark_key_as_used(key):
             f.seek(0)
             json.dump(used_keys, f)
             f.truncate()
+            print("[DEBUG] Updating used_keys.json")
+            print("[DEBUG] Key added:", key)
+
 
 # --- Main UI ---
 GENRE_MAP = {
