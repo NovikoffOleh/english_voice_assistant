@@ -35,7 +35,8 @@ ADMIN_SECRET = os.getenv("ADMIN_SECRET")
 if not ADMIN_SECRET:
     raise ValueError("❌ ADMIN_SECRET is not set. Check your .env file and reload the environment.")
 
-GIFT_KEYS = os.getenv("GIFT_KEYS", "").split(",")
+with open("gift_keys.json", "r") as f:
+    GIFT_KEYS = json.load(f)
 
 USED_KEYS_FILE = "used_keys.json"
 ACTIVATED_USERS_FILE = "activated_users.json"
@@ -204,12 +205,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await launch_assistant(update, context)
             return
 
-        elif text in GIFT_KEYS and not is_key_used(text):
-            mark_key_as_used(text)
+       
+        elif text.strip() in GIFT_KEYS and not is_key_used(text.strip()):
+            mark_key_as_used(text.strip())
             mark_user_as_authorized(user_id)
             await update.message.reply_text("✅ Access granted.")
             await launch_assistant(update, context)
             return
+
 
         else:
             await update.message.reply_text("❌ Invalid or used key. Please try again.")
