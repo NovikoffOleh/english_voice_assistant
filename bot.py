@@ -124,12 +124,14 @@ async def start_with_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name")
+
     keyboard = [
         ["💬 Queries", "🎮 Movies"],
         ["🗓 Plan", "🧘 Relax"],
-        ["🌤 Weather Forecast", "🗞 News"],  # &lt;--- ADDED
-        ["ℹ️ Help"]
+        ["🌤 Weather Forecast", "🗞 News"],
+        ["ℹ️ Help", "🔑 Key"]
     ]
+
 
     now = datetime.now().hour
 
@@ -402,9 +404,24 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         await help_command(update, context)
         return
         
+        
     if text in ["🗞 news", "/news"]:
         await news_command(update, context)
         return
+    
+    if text in ["🔑 key", "/key"]:
+        key_info = (
+            "🔒 Your access to this bot is linked to your Telegram account.\n\n"
+            "✅ If you delete and later reopen the bot – access will remain.\n"
+            "✅ If you change your phone but keep the same Telegram account – access will remain.\n\n"
+            "⚠️ However, note:\n"
+            "🔁 If you create a new Telegram account (even with the same name),\n"
+            "🆕 Or register with a different phone number,\n"
+            "❌ The old access key will not work, as the bot won't recognize your new account."
+        )
+        await update.message.reply_text(key_info)
+        return
+
 
     if text in ["queries", "dialogue", "/gpt", "💬 queries"]:
         await gpt_mode(update, context)
