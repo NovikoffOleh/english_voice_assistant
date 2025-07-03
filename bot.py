@@ -36,14 +36,9 @@ ADMIN_SECRET = os.getenv("ADMIN_SECRET")
 if not ADMIN_SECRET:
     raise ValueError("❌ ADMIN_SECRET is not set. Check your .env file and reload the environment.")
 
-# --- Define file paths ---
-GIFT_KEYS_FILE = "data/gift_keys.json"
+GIFT_KEYS = os.getenv("GIFT_KEYS", "").split(",")
 USED_KEYS_FILE = "data/used_keys.json"
 ACTIVATED_USERS_FILE = "data/activated_users.json"
-
-# --- Load gift keys ---
-with open(GIFT_KEYS_FILE, "r") as f:
-    GIFT_KEYS = json.load(f)
 
 # Ensure used_keys.json and activated_users.json exist
 for file in [USED_KEYS_FILE, ACTIVATED_USERS_FILE]:
