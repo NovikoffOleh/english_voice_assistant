@@ -12,3 +12,6 @@ venv/
 *.ogg
 *.wav
 models/
+data/gift_keys.json
+data/used_keys.json
+data/activated_users.json
