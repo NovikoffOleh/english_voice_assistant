@@ -13,6 +13,7 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
+
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -35,11 +36,14 @@ ADMIN_SECRET = os.getenv("ADMIN_SECRET")
 if not ADMIN_SECRET:
     raise ValueError("❌ ADMIN_SECRET is not set. Check your .env file and reload the environment.")
 
-with open("gift_keys.json", "r") as f:
-    GIFT_KEYS = json.load(f)
+# --- Define file paths ---
+GIFT_KEYS_FILE = "data/gift_keys.json"
+USED_KEYS_FILE = "data/used_keys.json"
+ACTIVATED_USERS_FILE = "data/activated_users.json"
 
-USED_KEYS_FILE = "used_keys.json"
-ACTIVATED_USERS_FILE = "activated_users.json"
+# --- Load gift keys ---
+with open(GIFT_KEYS_FILE, "r") as f:
+    GIFT_KEYS = json.load(f)
 
 # Ensure used_keys.json and activated_users.json exist
 for file in [USED_KEYS_FILE, ACTIVATED_USERS_FILE]:
@@ -390,7 +394,7 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         sounds = {
             "🌧 rain": "https://www.youtube.com/watch?v=GxE6g1fLxoo",
             "🔥 fireplace": "https://www.youtube.com/watch?v=eyU3bRy2x44",
-            "🎵 relaxmusic": "https://www.youtube.com/watch?v=2OEL4P1Rz04"
+            "🎵 relax": "https://www.youtube.com/watch?v=2OEL4P1Rz04"
         }
         await update.message.reply_text(f"🎧 Enjoy relaxation: {sounds[text]}")
         return
@@ -505,6 +509,6 @@ async def main():
 
 if __name__ == "__main__":
     import nest_asyncio
-    nest_asyncio.apply()
+    #nest_asyncio.apply()
     asyncio.run(main())
 
