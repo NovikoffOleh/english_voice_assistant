@@ -13,7 +13,6 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
-
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
