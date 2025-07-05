@@ -514,12 +514,34 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
             schedule_reminder(context, update.effective_chat.id, task_text, parsed["interval_sec"])
             await update.message.reply_text(f"✅ Reminder set\n⏳ I will remind you in {parsed['interval_sec'] // 60} minutes")
             return
-
+            
         parsed_abs = parse_absolute_time_request(text)
         if parsed_abs:
             task_text = parsed_abs["task_text"].replace("remind", "", 1).strip()
-            schedule_reminder(context, update.effective_chat.id, task_text, parsed_abs["interval_sec"])
-            await update.message.reply_text(f"✅ Reminder set\n🕒 It will trigger at the specified time")
+
+            # --- Обчислення часового зсуву користувача ---
+            try:
+                with open("data/user_timezones.json", "r") as f:
+                    timezones = json.load(f)
+
+                user_time_str = timezones.get(str(update.effective_user.id), None)
+                if user_time_str:
+                    user_time = datetime.strptime(user_time_str, "%H:%M").time()
+                    now_utc = datetime.utcnow().time()
+
+                    utc_minutes = now_utc.hour * 60 + now_utc.minute
+                    user_minutes = user_time.hour * 60 + user_time.minute
+                    offset_minutes = user_minutes - utc_minutes
+
+                    corrected_interval = parsed_abs["interval_sec"] + offset_minutes * 60
+                else:
+                    corrected_interval = parsed_abs["interval_sec"]
+            except Exception as e:
+                print(f"[ERROR] Timezone correction failed: {e}")
+                corrected_interval = parsed_abs["interval_sec"]
+
+            schedule_reminder(context, update.effective_chat.id, task_text, corrected_interval)
+            await update.message.reply_text(f"✅ Reminder set\n🕒 It will trigger at your local time")
             return
 
         await update.message.reply_text("⚠️ Could not recognize the time. Please try again.")
