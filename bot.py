@@ -25,6 +25,7 @@ from Plan.planner import parse_task_request, parse_absolute_time_request
 from Plan.timer_manager import schedule_reminder
 from modules.mood_checker import send_mood_request, handle_mood_callback
 from modules.news_fetcher import fetch_news  # &lt;--- ADDED
+from datetime import datetime, timedelta
 
 nest_asyncio.apply()
 load_dotenv()
@@ -464,6 +465,46 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         context.user_data["awaiting_task"] = True
         await update.message.reply_text("📝 What exactly shall we plan? For example: 'Remind me in 10 minutes about the meeting'")
         return
+    
+    if context.user_data.get("awaiting_task"):
+        context.user_data["awaiting_task"] = False
+        parsed = parse_task_request(text)
+        if parsed:
+            task_text = parsed["task_text"].replace("remind", "", 1).strip()
+            schedule_reminder(context, update.effective_chat.id, task_text, parsed["interval_sec"])
+            await update.message.reply_text(f"✅ Reminder set\n⏳ I will remind you in {parsed['interval_sec'] // 60} minutes")
+            return
+
+        parsed_abs = parse_absolute_time_request(text)
+        if parsed_abs:
+            task_text = parsed_abs["task_text"].replace("remind", "", 1).strip()
+
+            # --- Отримуємо зсув часу користувача з файлу ---
+            try:
+                with open("data/user_timezones.json", "r") as f:
+                    timezones = json.load(f)
+
+                user_input = timezones.get(str(update.effective_user.id))
+                if user_input:
+                    # Нормалізація формату часу, якщо був збережений із крапками чи дефісами
+                    normalized_time = re.sub(r"[.\-\s]", ":", user_input.strip())
+                    user_time = datetime.strptime(normalized_time, "%H:%M").time()
+                    server_time = datetime.utcnow().time()
+                    offset = user_time.hour - server_time.hour
+                else:
+                    offset = 0
+            except Exception as e:
+                print(f"[WARN] Timezone file error: {e}")
+                offset = 0
+
+            # --- Коригуємо інтервал ---
+            corrected_interval = parsed_abs["interval_sec"] - (offset * 3600)
+            corrected_interval = max(corrected_interval, 0)  # не дозволити від'ємне значення
+
+            schedule_reminder(context, update.effective_chat.id, task_text, corrected_interval)
+            await update.message.reply_text(f"✅ Reminder set\n🕒 It will trigger at your local time")
+            return
+
 
     if context.user_data.get("awaiting_task"):
         context.user_data["awaiting_task"] = False
