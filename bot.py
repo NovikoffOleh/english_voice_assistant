@@ -78,6 +78,19 @@ def mark_key_as_used(key):
             f.truncate()
             print("[DEBUG] Updating used_keys.json")
             print("[DEBUG] Key added:", key)
+def mark_user_as_authorized(user_id):
+    with open(ACTIVATED_USERS_FILE, "r+") as f:
+        users = json.load(f)
+        if user_id not in users:
+            users.append(user_id)
+            f.seek(0)
+            json.dump(users, f)
+            f.truncate()
+
+# --- НОВИЙ БЛОК: Запит і збереження таймзони ---
+async def ask_for_timezone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🕒 To set your local timezone, please enter the current time in your city (e.g., 14:30)")
+    context.user_data["awaiting_timezone"] = True
 
 
 # --- Main UI ---
@@ -104,7 +117,11 @@ def clean_query(text):
     return re.sub(r"[^\w\s]", "", cleaned)
 
 # --- START command ---
+# --- ДОПОВНЕННЯ ДО launch_assistant ---
 async def launch_assistant(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if "timezone_offset" not in context.user_data:
+        await ask_for_timezone(update, context)
+        return
     await start(update, context)
 
 
@@ -131,7 +148,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
 
 
-    now = datetime.now().hour
+    # --- ДОДАТИ ДО start() замість now = datetime.now().hour ---
+    tz_offset = context.user_data.get("timezone_offset", 0)
+    now = (datetime.utcnow().hour + tz_offset) % 24
 
     if 5 <= now < 12:
         greeting_time = "🌅 Good morning"
@@ -219,11 +238,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await launch_assistant(update, context)
             return
 
-
         else:
             await update.message.reply_text("❌ Invalid or used key. Please try again.")
             context.user_data["awaiting_password"] = True
             return
+
+    # --- ДОДАТИ У handle_message перед try ---
+    if context.user_data.get("awaiting_timezone"):
+        match = re.match(r"^(\d{1,2})[:.](\d{2})$", text)
+        if match:
+            user_hour = int(match.group(1))
+            user_minute = int(match.group(2))
+            now_utc = datetime.utcnow()
+            user_time = datetime(now_utc.year, now_utc.month, now_utc.day, user_hour, user_minute)
+            delta = (user_time - now_utc).total_seconds() // 3600
+            context.user_data["timezone_offset"] = int(delta)
+            context.user_data["awaiting_timezone"] = False
+            await update.message.reply_text(f"✅ Timezone set. Offset from UTC: {int(delta)} hours")
+            await start(update, context)
+        else:
+            await update.message.reply_text("⚠️ Please enter time in HH:MM format (e.g., 21:45)")
+        return
 
     try:
         if update.message.voice:
