@@ -53,8 +53,7 @@ def parse_task_request(text: str) -> dict | None:
 
 def parse_absolute_time_request(text: str) -> dict | None:
     """
-    Parses phrases like: "remind me at 19:30", "remind at 7.45", "remind me at 21-00"
-    Returns interval in seconds and target_time object.
+    Parses phrases like: "remind me at 19:30", "remind at 7.45"
     """
     text = text.lower().strip()
 
@@ -68,16 +67,15 @@ def parse_absolute_time_request(text: str) -> dict | None:
     except ValueError:
         return None
 
-    now_utc = datetime.utcnow()
-    target_time = datetime.strptime(f"{hour:02d}:{minute:02d}", "%H:%M").time()
-    target_datetime = now_utc.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    now = datetime.now()
+    target_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
-    if target_datetime <= now_utc:
-        target_datetime += timedelta(days=1)
+    if target_time <= now:
+        target_time += timedelta(days=1)
 
-    interval_sec = int((target_datetime - now_utc).total_seconds())
+    interval_sec = int((target_time - now).total_seconds())
 
-    # Clean up text
+    # Очистка від службових слів
     cleaned_text = text.replace(match.group(0), "")
     cleaned_text = re.sub(r"\b(remind( me)?|at|to|minutes?|hours?)\b", "", cleaned_text)
     cleaned_text = re.sub(r"\s+", " ", cleaned_text).strip()
@@ -85,6 +83,5 @@ def parse_absolute_time_request(text: str) -> dict | None:
 
     return {
         "interval_sec": interval_sec,
-        "task_text": task_text,
-        "target_time": target_time  # 👈 обов'язковий для timezone logic
+        "task_text": task_text
     }
