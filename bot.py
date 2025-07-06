@@ -480,17 +480,20 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
             task_text = parsed_abs["task_text"].replace("remind", "", 1).strip()
 
             # --- Отримуємо зсув часу користувача з файлу ---
+                
             try:
                 with open("data/user_timezones.json", "r") as f:
                     timezones = json.load(f)
 
                 user_input = timezones.get(str(update.effective_user.id))
                 if user_input:
-                    # Нормалізація формату часу, якщо був збережений із крапками чи дефісами
+                    # Нормалізація часу: заміна крапок і дефісів на двокрапку
                     normalized_time = re.sub(r"[.\-\s]", ":", user_input.strip())
-                    user_time = datetime.strptime(normalized_time, "%H:%M").time()
-                    server_time = datetime.utcnow().time()
-                    offset = user_time.hour - server_time.hour
+                    user_time = datetime.strptime(normalized_time, "%H:%M")
+                    server_time = datetime.utcnow()
+
+                    # Обчислюємо зсув у секундах (не тільки години!)
+                    offset = int((user_time - server_time).total_seconds())
                 else:
                     offset = 0
             except Exception as e:
