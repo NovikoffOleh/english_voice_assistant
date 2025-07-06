@@ -478,37 +478,36 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         parsed_abs = parse_absolute_time_request(text)
         if parsed_abs:
             task_text = parsed_abs["task_text"].replace("remind", "", 1).strip()
-
+            
             try:
-                with open("data/user_timezones.json", "r") as f:
-                    timezones = json.load(f)
+               with open("data/user_timezones.json", "r") as f:
+                   timezones = json.load(f)
 
-                user_input = timezones.get(str(update.effective_user.id))
-                if user_input:
-                    # Нормалізація формату (12.00 / 12-00 → 12:00)
-                    normalized_time = re.sub(r"[.\-\s]", ":", user_input.strip())
-                    user_local_time = datetime.strptime(normalized_time, "%H:%M")
+               user_input = timezones.get(str(update.effective_user.id))
+               if user_input:
+                   normalized_time = re.sub(r"[.\-\s]", ":", user_input.strip())
+                   user_local_time = datetime.strptime(normalized_time, "%H:%M").time()
 
-                    # Отримуємо локальний час користувача зараз (сьогоднішня дата + введена година)
-                    now_utc = datetime.utcnow()
-                    user_time_today = now_utc.replace(hour=user_local_time.hour, minute=user_local_time.minute, second=0, microsecond=0)
+                   # Отримуємо введений час нагадування
+                   target_time_local = parsed_abs["target_time"]
 
-                    # Користувач просить нагадати о конкретному часі:
-                    target_time_local = parsed_abs["target_time"]
+                   # Конвертуємо обидва до секунд з початку доби
+                   user_now_sec = user_local_time.hour * 3600 + user_local_time.minute * 60
+                   target_sec = target_time_local.hour * 3600 + target_time_local.minute * 60
 
-                    # Цей час ми приводимо до UTC, використовуючи локальний час користувача як базу
-                    target_datetime_utc = user_time_today.replace(hour=target_time_local.hour, minute=target_time_local.minute)
+                   # Якщо цільовий час раніше – переносимо на завтра
+                   if target_sec <= user_now_sec:
+                       target_sec += 86400  # +1 день у секундах
 
-                    # Якщо цільовий час вже минув — переносимо на завтра
-                    if target_datetime_utc < now_utc:
-                        target_datetime_utc += timedelta(days=1)
+                   # Різниця в секундах — інтервал
+                   interval_sec = target_sec - user_now_sec
 
-                    interval_sec = int((target_datetime_utc - now_utc).total_seconds())
-                else:
-                    interval_sec = parsed_abs["interval_sec"]  # fallback
-            except Exception as e:
-                print(f"[WARN] Timezone logic failed: {e}")
-                interval_sec = parsed_abs["interval_sec"]
+               else:
+                   interval_sec = parsed_abs["interval_sec"]
+           except Exception as e:
+               print(f"[WARN] Timezone logic failed: {e}")
+               interval_sec = parsed_abs["interval_sec"]
+
 
             # Фінальне планування
             schedule_reminder(context, update.effective_chat.id, task_text, interval_sec)
