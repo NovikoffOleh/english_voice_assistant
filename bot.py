@@ -480,29 +480,36 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
             task_text = parsed_abs["task_text"].replace("remind", "", 1).strip()
 
             # --- Отримуємо зсув часу користувача з файлу ---
-                
             try:
-                with open("data/user_timezones.json", "r") as f:
-                    timezones = json.load(f)
+               with open("data/user_timezones.json", "r") as f:
+                   timezones = json.load(f)
 
-                user_input = timezones.get(str(update.effective_user.id))
-                if user_input:
-                    # Нормалізація часу: заміна крапок і дефісів на двокрапку
-                    normalized_time = re.sub(r"[.\-\s]", ":", user_input.strip())
-                    user_time = datetime.strptime(normalized_time, "%H:%M")
-                    server_time = datetime.utcnow()
+               user_input = timezones.get(str(update.effective_user.id))
+               if user_input:
+                   # Нормалізація часу користувача
+                   normalized_time = re.sub(r"[.\-\s]", ":", user_input.strip())
+                   user_local_time = datetime.strptime(normalized_time, "%H:%M")
+        
+                   # Поточний UTC
+                   server_now = datetime.utcnow()
+        
+                   # Повертаємо поточну дату з введеним часом для обчислення зсуву
+                   user_now = server_now.replace(hour=user_local_time.hour, minute=user_local_time.minute, second=0, microsecond=0)
+        
+                   # Зсув у секундах
+                   timezone_offset_sec = int((user_now - server_now).total_seconds())
+               else:
+                   timezone_offset_sec = 0
+           except Exception as e:
+               print(f"[WARN] Timezone file error: {e}")
+               timezone_offset_sec = 0
 
-                    # Обчислюємо зсув у секундах (не тільки години!)
-                    offset = int((user_time - server_time).total_seconds())
-                else:
-                    offset = 0
-            except Exception as e:
-                print(f"[WARN] Timezone file error: {e}")
-                offset = 0
 
             # --- Коригуємо інтервал ---
-            corrected_interval = parsed_abs["interval_sec"] - (offset * 3600)
-            corrected_interval = max(corrected_interval, 0)  # не дозволити від'ємне значення
+            #corrected_interval = parsed_abs["interval_sec"] - (offset * 3600)
+            #corrected_interval = max(corrected_interval, 0)  # не дозволити від'ємне значення
+            corrected_interval = parsed_abs["interval_sec"] + timezone_offset_sec
+
 
             schedule_reminder(context, update.effective_chat.id, task_text, corrected_interval)
             await update.message.reply_text(f"✅ Reminder set\n🕒 It will trigger at your local time")
