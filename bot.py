@@ -478,41 +478,37 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         parsed_abs = parse_absolute_time_request(text)
         if parsed_abs:
             task_text = parsed_abs["task_text"].replace("remind", "", 1).strip()
-            
+
             try:
-               with open("data/user_timezones.json", "r") as f:
-                   timezones = json.load(f)
+                with open("data/user_timezones.json", "r") as f:
+                    timezones = json.load(f)
 
-               user_input = timezones.get(str(update.effective_user.id))
-               if user_input:
-                   normalized_time = re.sub(r"[.\-\s]", ":", user_input.strip())
-                   user_local_time = datetime.strptime(normalized_time, "%H:%M").time()
+                user_input = timezones.get(str(update.effective_user.id))
+                if user_input:
+                    normalized_time = re.sub(r"[.\-\s]", ":", user_input.strip())
+                    user_local_time = datetime.strptime(normalized_time, "%H:%M").time()
 
-                   # Отримуємо введений час нагадування
-                   target_time_local = parsed_abs["target_time"]
+                    target_time_local = parsed_abs["target_time"]
 
-                   # Конвертуємо обидва до секунд з початку доби
-                   user_now_sec = user_local_time.hour * 3600 + user_local_time.minute * 60
-                   target_sec = target_time_local.hour * 3600 + target_time_local.minute * 60
+                    user_now_sec = user_local_time.hour * 3600 + user_local_time.minute * 60
+                    target_sec = target_time_local.hour * 3600 + target_time_local.minute * 60
 
-                   # Якщо цільовий час раніше – переносимо на завтра
-                   if target_sec <= user_now_sec:
-                       target_sec += 86400  # +1 день у секундах
+                    if target_sec <= user_now_sec:
+                        target_sec += 86400
 
-                   # Різниця в секундах — інтервал
-                   interval_sec = target_sec - user_now_sec
+                    interval_sec = target_sec - user_now_sec
+                else:
+                    interval_sec = parsed_abs["interval_sec"]
 
-               else:
-                   interval_sec = parsed_abs["interval_sec"]
-           except Exception as e:
-               print(f"[WARN] Timezone logic failed: {e}")
-               interval_sec = parsed_abs["interval_sec"]
-
+            except Exception as e:
+                print(f"[WARN] Timezone logic failed: {e}")
+                interval_sec = parsed_abs["interval_sec"]
 
             # Фінальне планування
             schedule_reminder(context, update.effective_chat.id, task_text, interval_sec)
             await update.message.reply_text("✅ Reminder set\n🕒 It will trigger at your local time.")
             return
+
             
 
     if context.user_data.get("awaiting_task"):
