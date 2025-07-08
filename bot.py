@@ -104,10 +104,6 @@ def clean_query(text):
     return re.sub(r"[^\w\s]", "", cleaned)
 
 # --- START command ---
-async def launch_assistant(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await start(update, context)
-
-
 async def start_with_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
@@ -116,7 +112,20 @@ async def start_with_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["awaiting_password"] = True
         return
 
+    # Перевірка timezone
+    try:
+        with open("data/user_timezones.json", "r") as f:
+            timezones = json.load(f)
+    except FileNotFoundError:
+        timezones = {}
+
+    if str(user_id) not in timezones:
+        await update.message.reply_text("🕒 Please enter your **local time** in HH:MM format (e.g., 19:30)")
+        context.user_data["awaiting_timezone"] = True
+        return
+
     await launch_assistant(update, context)
+
 
 # Если авторизован — запуск ассистента
     
@@ -224,6 +233,37 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ Invalid or used key. Please try again.")
             context.user_data["awaiting_password"] = True
             return
+    
+    if context.user_data.get("awaiting_timezone"):
+        input_time = text.strip()
+
+        # Нормалізація введеного часу: 19.30 → 19:30
+        normalized = re.sub(r"[^\d:]", ":", input_time).replace("::", ":")
+
+        try:
+            datetime.strptime(normalized, "%H:%M")  # Перевірка формату
+
+            # Завантаження існуючого словника
+            try:
+                with open("data/user_timezones.json", "r") as f:
+                    tz_data = json.load(f)
+            except FileNotFoundError:
+                tz_data = {}
+
+            tz_data[str(user_id)] = normalized
+
+            with open("data/user_timezones.json", "w") as f:
+                json.dump(tz_data, f)
+
+            context.user_data["awaiting_timezone"] = False
+            await update.message.reply_text("✅ Local time saved!")
+            await launch_assistant(update, context)
+
+        except ValueError:
+            await update.message.reply_text("⚠️ Invalid format. Please send time like `19:30` or `7.45`.")
+        return
+
+
 
     try:
         if update.message.voice:
@@ -438,16 +478,46 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
             schedule_reminder(context, update.effective_chat.id, task_text, parsed["interval_sec"])
             await update.message.reply_text(f"✅ Reminder set\n⏳ I will remind you in {parsed['interval_sec'] // 60} minutes")
             return
-
+        
         parsed_abs = parse_absolute_time_request(text)
         if parsed_abs:
             task_text = parsed_abs["task_text"].replace("remind", "", 1).strip()
-            schedule_reminder(context, update.effective_chat.id, task_text, parsed_abs["interval_sec"])
-            await update.message.reply_text(f"✅ Reminder set\n🕒 It will trigger at the specified time")
+            target_time = parsed_abs["target_time"]  # тип: datetime.time
+
+            try:
+                with open("data/user_timezones.json", "r") as f:
+                    timezones = json.load(f)
+
+                user_input = timezones.get(str(update.effective_user.id))
+                if user_input:
+                    normalized_time = re.sub(r"[.\-\s]", ":", user_input.strip())
+                    user_time = datetime.strptime(normalized_time, "%H:%M").time()
+                    now_utc = datetime.utcnow()
+
+                    user_minutes = user_time.hour * 60 + user_time.minute
+                    utc_minutes = now_utc.hour * 60 + now_utc.minute
+                    offset_minutes = user_minutes - utc_minutes
+
+                    today_target = now_utc.replace(hour=target_time.hour, minute=target_time.minute, second=0, microsecond=0)
+                    adjusted_target = today_target - timedelta(minutes=offset_minutes)
+
+                    if adjusted_target <= now_utc:
+                        adjusted_target += timedelta(days=1)
+
+                    interval_sec = int((adjusted_target - now_utc).total_seconds())
+                else:
+                    interval_sec = 86400  # fallback
+                
+            except Exception as e:
+                print(f"[WARN] Timezone logic failed: {e}")
+                interval_sec = 86400  # fallback
+
+            schedule_reminder(context, update.effective_chat.id, task_text, interval_sec)
+            await update.message.reply_text(f"✅ Reminder set\n🕒 It will trigger at your local time")
             return
 
-        await update.message.reply_text("⚠️ Could not recognize the time. Please try again.")
-        return
+
+
 
     if any(trigger in text for trigger in trigger_words):
         query = clean_query(text)

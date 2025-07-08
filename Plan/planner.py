@@ -7,6 +7,7 @@ DIGITS = {
     "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10
 }
 
+
 def parse_task_request(text: str) -> dict | None:
     """
     Parses phrases like: "remind me to drink water in 30 minutes"
@@ -67,13 +68,8 @@ def parse_absolute_time_request(text: str) -> dict | None:
     except ValueError:
         return None
 
-    now = datetime.now()
-    target_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-
-    if target_time <= now:
-        target_time += timedelta(days=1)
-
-    interval_sec = int((target_time - now).total_seconds())
+    # Об'єкт часу, без врахування часових поясів — тільки локальний час
+    target_time = datetime.strptime(f"{hour:02}:{minute:02}", "%H:%M").time()
 
     # Очистка від службових слів
     cleaned_text = text.replace(match.group(0), "")
@@ -82,6 +78,6 @@ def parse_absolute_time_request(text: str) -> dict | None:
     task_text = cleaned_text if cleaned_text else "reminder"
 
     return {
-        "interval_sec": interval_sec,
+        "target_time": target_time,
         "task_text": task_text
     }
