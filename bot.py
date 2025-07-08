@@ -205,6 +205,20 @@ async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # --- LAUNCH HELPER ---
 async def launch_assistant(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    # Check if user provided timezone already
+    try:
+        with open("data/user_timezones.json", "r") as f:
+            timezones = json.load(f)
+    except FileNotFoundError:
+        timezones = {}
+
+    if str(user_id) not in timezones:
+        await update.message.reply_text("🕒 Please enter your **local time** in HH:MM format (e.g., 19:30)")
+        context.user_data["awaiting_timezone"] = True
+        return
+
     await start(update, context)
 
 # --- MESSAGE HANDLER ---
