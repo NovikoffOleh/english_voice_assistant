@@ -201,6 +201,9 @@ async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"🔄  {name}, query mode is activated — you can ask questions or search for images.")
 
+# --- LAUNCH HELPER ---
+async def launch_assistant(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await start(update, context)
 
 # --- MESSAGE HANDLER ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
