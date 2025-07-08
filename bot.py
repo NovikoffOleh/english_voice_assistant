@@ -112,12 +112,14 @@ async def start_with_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["awaiting_password"] = True
         return
 
-    # Перевірка timezone
-    try:
-        with open("data/user_timezones.json", "r") as f:
-            timezones = json.load(f)
-    except FileNotFoundError:
-        timezones = {}
+    # 🔽 ПЕРЕВІРКА І СТВОРЕННЯ ФАЙЛУ
+    if not os.path.exists("data/user_timezones.json"):
+        with open("data/user_timezones.json", "w") as f:
+            json.dump({}, f)
+
+    # Завантаження
+    with open("data/user_timezones.json", "r") as f:
+        timezones = json.load(f)
 
     if str(user_id) not in timezones:
         await update.message.reply_text("🕒 Please enter your **local time** in HH:MM format (e.g., 19:30)")
