@@ -1,7 +1,7 @@
 import re
 import json
 from datetime import datetime, timedelta
-from reminder_manager import add_reminder  # 🔗 Імпорт
+from Plan.reminder_manager import add_reminder
 
 # Словники для текстових чисел
 DIGITS = {
