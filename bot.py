@@ -27,6 +27,8 @@ from Plan.timer_manager import schedule_reminder
 from modules.mood_checker import send_mood_request, handle_mood_callback
 from modules.news_fetcher import fetch_news  # &lt;--- ADDED
 from Plan.reminder_manager import check_and_send_reminders
+from Plan.reminder_manager import start_reminder_checker
+
 
 
 nest_asyncio.apply()
