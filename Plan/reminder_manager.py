@@ -61,6 +61,7 @@ async def check_and_send_reminders(bot: Bot):
         await asyncio.sleep(30)  # перевірка кожні 30 секунд
 from telegram.ext import Application
 
-def start_reminder_checker(application: Application):
+async def start_reminder_checker(application: Application):
     bot = application.bot
-    application.create_task(check_and_send_reminders(bot))
+    asyncio.create_task(check_and_send_reminders(bot))
+
