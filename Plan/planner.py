@@ -1,12 +1,13 @@
 import re
+import json
 from datetime import datetime, timedelta
+from reminder_manager import add_reminder  # 🔗 Імпорт
 
 # Словники для текстових чисел
 DIGITS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
     "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10
 }
-
 
 def parse_task_request(text: str) -> dict | None:
     """
@@ -51,10 +52,10 @@ def parse_task_request(text: str) -> dict | None:
         "task_text": task_text
     }
 
-
-def parse_absolute_time_request(text: str) -> dict | None:
+def parse_absolute_time_request(text: str, user_id: int) -> dict | None:
     """
     Parses phrases like: "remind me at 19:30", "remind at 7.45"
+    Saves it via reminder_manager.add_reminder()
     """
     text = text.lower().strip()
 
@@ -68,16 +69,25 @@ def parse_absolute_time_request(text: str) -> dict | None:
     except ValueError:
         return None
 
-    # Об'єкт часу, без врахування часових поясів — тільки локальний час
-    target_time = datetime.strptime(f"{hour:02}:{minute:02}", "%H:%M").time()
+    now = datetime.now()
+    target_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
-    # Очистка від службових слів
+    if target_time <= now:
+        target_time += timedelta(days=1)
+
+    # ⏱ Розрахунок і збереження
+    interval_sec = int((target_time - now).total_seconds())
+
+    # Очистка службових слів
     cleaned_text = text.replace(match.group(0), "")
     cleaned_text = re.sub(r"\b(remind( me)?|at|to|minutes?|hours?)\b", "", cleaned_text)
     cleaned_text = re.sub(r"\s+", " ", cleaned_text).strip()
     task_text = cleaned_text if cleaned_text else "reminder"
 
+    # 📝 Запис у reminders.json
+    add_reminder(user_id, task_text, target_time.strftime("%Y-%m-%d %H:%M:%S"))
+
     return {
-        "target_time": target_time,
+        "interval_sec": interval_sec,
         "task_text": task_text
     }

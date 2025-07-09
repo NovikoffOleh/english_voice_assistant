@@ -16,6 +16,7 @@ from telegram.ext import (
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
+
 from modules.voice_recognizer import recognize_speech
 from modules.gpt_handler import ask_gpt
 from modules.image_search import get_image_url
@@ -25,6 +26,7 @@ from Plan.planner import parse_task_request, parse_absolute_time_request
 from Plan.timer_manager import schedule_reminder
 from modules.mood_checker import send_mood_request, handle_mood_callback
 from modules.news_fetcher import fetch_news  # &lt;--- ADDED
+from reminder_manager import check_and_send_reminders
 
 nest_asyncio.apply()
 load_dotenv()
@@ -38,6 +40,7 @@ if not ADMIN_SECRET:
 GIFT_KEYS = os.getenv("GIFT_KEYS", "").split(",")
 USED_KEYS_FILE = "data/used_keys.json"
 ACTIVATED_USERS_FILE = "data/activated_users.json"
+USER_TIMEZONES_FILE = "data/user_timezones.json"
 
 # Ensure used_keys.json and activated_users.json exist
 for file in [USED_KEYS_FILE, ACTIVATED_USERS_FILE]:
@@ -79,7 +82,21 @@ def mark_key_as_used(key):
             print("[DEBUG] Updating used_keys.json")
             print("[DEBUG] Key added:", key)
 
+def save_user_timezone(user_id, user_hour):
+    server_hour = datetime.now().hour
+    offset = (user_hour - server_hour) % 24
+    with open(USER_TIMEZONES_FILE, "r+") as f:
+        timezones = json.load(f)
+        timezones[str(user_id)] = offset
+        f.seek(0)
+        json.dump(timezones, f)
+        f.truncate()
 
+def get_user_timezone(user_id):
+    with open(USER_TIMEZONES_FILE, "r") as f:
+        tz = json.load(f)
+        return tz.get(str(user_id), 0)
+        
 # --- Main UI ---
 GENRE_MAP = {
     "thriller": 53,
@@ -104,6 +121,10 @@ def clean_query(text):
     return re.sub(r"[^\w\s]", "", cleaned)
 
 # --- START command ---
+async def launch_assistant(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await start(update, context)
+
+
 async def start_with_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
 
@@ -112,23 +133,25 @@ async def start_with_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data["awaiting_password"] = True
         return
 
-    # 🔽 ПЕРЕВІРКА І СТВОРЕННЯ ФАЙЛУ
-    if not os.path.exists("data/user_timezones.json"):
-        with open("data/user_timezones.json", "w") as f:
-            json.dump({}, f)
+    # Перевірка, чи є ім'я
+    if not context.user_data.get("name"):
+        await update.message.reply_text("👋 What is your name?")
+        context.user_data["awaiting_name"] = True
+        return
 
-    # Завантаження
-    with open("data/user_timezones.json", "r") as f:
-        timezones = json.load(f)
+    # Перевірка, чи є timezone
+    try:
+        with open(USER_TIMEZONES_FILE, "r") as f:
+            timezones = json.load(f)
+    except FileNotFoundError:
+        timezones = {}
 
     if str(user_id) not in timezones:
-        await update.message.reply_text("🕒 Please enter your **local time** in HH:MM format (e.g., 19:30)")
+        await update.message.reply_text("⏰ Please enter your **current hour** (e.g., 14)")
         context.user_data["awaiting_timezone"] = True
         return
 
     await launch_assistant(update, context)
-
-
 # Если авторизован — запуск ассистента
     
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -203,43 +226,22 @@ async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"🔄  {name}, query mode is activated — you can ask questions or search for images.")
 
-# --- LAUNCH HELPER ---
-async def launch_assistant(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-
-    # Check if user provided timezone already
-    try:
-        with open("data/user_timezones.json", "r") as f:
-            timezones = json.load(f)
-    except FileNotFoundError:
-        timezones = {}
-
-    if str(user_id) not in timezones:
-        await update.message.reply_text("🕒 Please enter your **local time** in HH:MM format (e.g., 19:30)")
-        context.user_data["awaiting_timezone"] = True
-        return
-
-    await start(update, context)
 
 # --- MESSAGE HANDLER ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     text = update.message.text.strip() if update.message.text else ""
 
-    # Обработка пароля
+    # 🔐 Обробка пароля
     if context.user_data.get("awaiting_password"):
         context.user_data["awaiting_password"] = False
 
-
-        #if text == ADMIN_SECRET:
         if text.strip() == ADMIN_SECRET.strip():
-
             mark_user_as_authorized(user_id)
             await update.message.reply_text("✅ Admin access granted.")
             await launch_assistant(update, context)
             return
 
-       
         elif text.strip() in GIFT_KEYS and not is_key_used(text.strip()):
             mark_key_as_used(text.strip())
             mark_user_as_authorized(user_id)
@@ -247,61 +249,67 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await launch_assistant(update, context)
             return
 
-
         else:
             await update.message.reply_text("❌ Invalid or used key. Please try again.")
             context.user_data["awaiting_password"] = True
             return
-    
+
+    # 👤 Прийом імені
+    if context.user_data.get("awaiting_name"):
+        name = text.title()
+        context.user_data["name"] = name
+        context.user_data["awaiting_name"] = False
+        await update.message.reply_text(f"😊 Nice to meet you, {name}!")
+        await update.message.reply_text("⏰ What is your **current hour** (e.g., 14)?")
+        context.user_data["awaiting_timezone"] = True
+        return
+
+    # 🕓 Прийом локального часу
     if context.user_data.get("awaiting_timezone"):
-        input_time = text.strip()
-
-        # Нормалізація введеного часу: 19.30 → 19:30
-        normalized = re.sub(r"[^\d:]", ":", input_time).replace("::", ":")
-
         try:
-            datetime.strptime(normalized, "%H:%M")  # Перевірка формату
+            user_hour = int(re.sub(r"[^\d]", "", text))
+            if not (0 <= user_hour <= 23):
+                raise ValueError
 
-            # Завантаження існуючого словника
+            server_hour = datetime.now().hour
+            offset = user_hour - server_hour
+
             try:
                 with open("data/user_timezones.json", "r") as f:
-                    tz_data = json.load(f)
+                    timezones = json.load(f)
             except FileNotFoundError:
-                tz_data = {}
+                timezones = {}
 
-            tz_data[str(user_id)] = normalized
+            timezones[str(user_id)] = offset
 
             with open("data/user_timezones.json", "w") as f:
-                json.dump(tz_data, f)
+                json.dump(timezones, f)
 
             context.user_data["awaiting_timezone"] = False
-            await update.message.reply_text("✅ Local time saved!")
+            await update.message.reply_text(f"✅ Got it! Timezone offset saved (UTC{offset:+d})")
             await launch_assistant(update, context)
 
         except ValueError:
-            await update.message.reply_text("⚠️ Invalid format. Please send time like `19:30` or `7.45`.")
+            await update.message.reply_text("⚠️ Please enter the hour as a number between 0 and 23 (e.g., 14).")
         return
 
-
-
+    # 🎤 Обробка голосових і текстових повідомлень
     try:
         if update.message.voice:
-           file = await context.bot.get_file(update.message.voice.file_id)
-           voice_path = f"data/{update.message.voice.file_id}.ogg"
-           await file.download_to_drive(voice_path)
-           await update.message.reply_text("🎧 Recognizing speech...")
-           try:
-               lang = context.user_data.get("lang", "en")
-               recognized_text = await recognize_speech(voice_path, language=lang)
-               #recognized_text = await recognize_with_faster_whisper(voice_path, language=lang)
+            file = await context.bot.get_file(update.message.voice.file_id)
+            voice_path = f"data/{update.message.voice.file_id}.ogg"
+            await file.download_to_drive(voice_path)
+            await update.message.reply_text("🎧 Recognizing speech...")
 
-               recognized_text = re.sub(r"[^\w\s]", "", recognized_text).lower().strip()
-               await update.message.reply_text(f"💤 {context.user_data.get('name', 'friend')}, you said: {recognized_text}")
-               await process_text(update, context, recognized_text)
-           finally:
-               if os.path.exists(voice_path):
-                   os.remove(voice_path)
-                
+            try:
+                lang = context.user_data.get("lang", "en")
+                recognized_text = await recognize_speech(voice_path, language=lang)
+                recognized_text = re.sub(r"[^\w\s]", "", recognized_text).lower().strip()
+                await update.message.reply_text(f"💤 {context.user_data.get('name', 'friend')}, you said: {recognized_text}")
+                await process_text(update, context, recognized_text)
+            finally:
+                if os.path.exists(voice_path):
+                    os.remove(voice_path)
 
         elif update.message.text:
             text = update.message.text.lower().strip()
@@ -497,46 +505,16 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
             schedule_reminder(context, update.effective_chat.id, task_text, parsed["interval_sec"])
             await update.message.reply_text(f"✅ Reminder set\n⏳ I will remind you in {parsed['interval_sec'] // 60} minutes")
             return
-        
+
         parsed_abs = parse_absolute_time_request(text)
         if parsed_abs:
             task_text = parsed_abs["task_text"].replace("remind", "", 1).strip()
-            target_time = parsed_abs["target_time"]  # тип: datetime.time
-
-            try:
-                with open("data/user_timezones.json", "r") as f:
-                    timezones = json.load(f)
-
-                user_input = timezones.get(str(update.effective_user.id))
-                if user_input:
-                    normalized_time = re.sub(r"[.\-\s]", ":", user_input.strip())
-                    user_time = datetime.strptime(normalized_time, "%H:%M").time()
-                    now_utc = datetime.utcnow()
-
-                    user_minutes = user_time.hour * 60 + user_time.minute
-                    utc_minutes = now_utc.hour * 60 + now_utc.minute
-                    offset_minutes = user_minutes - utc_minutes
-
-                    today_target = now_utc.replace(hour=target_time.hour, minute=target_time.minute, second=0, microsecond=0)
-                    adjusted_target = today_target - timedelta(minutes=offset_minutes)
-
-                    if adjusted_target <= now_utc:
-                        adjusted_target += timedelta(days=1)
-
-                    interval_sec = int((adjusted_target - now_utc).total_seconds())
-                else:
-                    interval_sec = 86400  # fallback
-                
-            except Exception as e:
-                print(f"[WARN] Timezone logic failed: {e}")
-                interval_sec = 86400  # fallback
-
-            schedule_reminder(context, update.effective_chat.id, task_text, interval_sec)
-            await update.message.reply_text(f"✅ Reminder set\n🕒 It will trigger at your local time")
+            schedule_reminder(context, update.effective_chat.id, task_text, parsed_abs["interval_sec"])
+            await update.message.reply_text(f"✅ Reminder set\n🕒 It will trigger at the specified time")
             return
 
-
-
+        await update.message.reply_text("⚠️ Could not recognize the time. Please try again.")
+        return
 
     if any(trigger in text for trigger in trigger_words):
         query = clean_query(text)
@@ -586,7 +564,9 @@ async def main():
     scheduler.add_job(run_send_mood, CronTrigger(hour=16, minute=0))
     scheduler.add_job(run_send_mood, CronTrigger(hour=20, minute=0))
     scheduler.start()
-
+    # 🕒 Запускаємо фонову перевірку reminders.json
+    await start_reminder_checker(app)
+    
     print("🟢 Bot is running. Open Telegram and type /start")
     await app.run_polling()
 
