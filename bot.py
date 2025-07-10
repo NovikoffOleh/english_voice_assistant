@@ -571,7 +571,7 @@ async def main():
     # 🕒 Запускаємо фонову перевірку reminders.json
     #start_reminder_checker(app)
 
-    await start_reminder_checker(application)
+    await start_reminder_checker(app)
     await application.run_polling()
     
     print("🟢 Bot is running. Open Telegram and type /start")
