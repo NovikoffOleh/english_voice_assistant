@@ -509,7 +509,8 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
             await update.message.reply_text(f"✅ Reminder set\n⏳ I will remind you in {parsed['interval_sec'] // 60} minutes")
             return
 
-        parsed_abs = parse_absolute_time_request(text)
+        parsed_abs = parse_absolute_time_request(text, update.effective_user.id)
+
         if parsed_abs:
             task_text = parsed_abs["task_text"].replace("remind", "", 1).strip()
             schedule_reminder(context, update.effective_chat.id, task_text, parsed_abs["interval_sec"])
@@ -568,6 +569,8 @@ async def main():
     scheduler.add_job(run_send_mood, CronTrigger(hour=20, minute=0))
     scheduler.start()
     # 🕒 Запускаємо фонову перевірку reminders.json
+    #start_reminder_checker(app)
+
     await start_reminder_checker(app)
     
     print("🟢 Bot is running. Open Telegram and type /start")
