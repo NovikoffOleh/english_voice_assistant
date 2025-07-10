@@ -2,9 +2,9 @@ import json
 import asyncio
 from datetime import datetime
 from telegram import Bot
+from telegram.ext import Application
 
 REMINDER_FILE = "data/reminders.json"
-
 
 async def load_reminders():
     try:
@@ -13,15 +13,12 @@ async def load_reminders():
     except (FileNotFoundError, json.JSONDecodeError):
         return {}
 
-
 async def save_reminders(reminders):
     with open(REMINDER_FILE, "w") as f:
         json.dump(reminders, f, indent=2)
 
-
 async def add_reminder(user_id, task_text, target_time_str):
     reminders = await load_reminders()
-
     if str(user_id) not in reminders:
         reminders[str(user_id)] = []
 
@@ -29,9 +26,7 @@ async def add_reminder(user_id, task_text, target_time_str):
         "time": target_time_str,
         "task": task_text
     })
-
     await save_reminders(reminders)
-
 
 async def check_and_send_reminders(bot: Bot):
     while True:
@@ -45,23 +40,25 @@ async def check_and_send_reminders(bot: Bot):
             for reminder in user_reminders:
                 try:
                     target_time = datetime.fromisoformat(reminder["time"])
-                    if now >= target_time:
+                    seconds_diff = (now - target_time).total_seconds()
+                    if 0 <= seconds_diff <= 60:
                         to_send.append(reminder)
                 except Exception:
                     continue
 
             for reminder in to_send:
-                await bot.send_message(chat_id=int(user_id), text=f"⏰ Reminder: {reminder['task']}")
+                await bot.send_message(
+                    chat_id=int(user_id),
+                    text=f"🔔 Reminder:\n{reminder['task']}"
+                )
                 user_reminders.remove(reminder)
                 updated = True
 
         if updated:
             await save_reminders(reminders)
 
-        await asyncio.sleep(30)  # перевірка кожні 30 секунд
-from telegram.ext import Application
+        await asyncio.sleep(30)  # check every 30 seconds
 
 async def start_reminder_checker(application: Application):
     bot = application.bot
     asyncio.create_task(check_and_send_reminders(bot))
-
