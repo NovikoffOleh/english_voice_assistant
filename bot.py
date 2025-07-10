@@ -509,7 +509,7 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
             await update.message.reply_text(f"✅ Reminder set\n⏳ I will remind you in {parsed['interval_sec'] // 60} minutes")
             return
 
-        parsed_abs = parse_absolute_time_request(text, update.effective_user.id)
+        parsed_abs = await parse_absolute_time_request(text, update.effective_user.id)
 
         if parsed_abs:
             task_text = parsed_abs["task_text"].replace("remind", "", 1).strip()
