@@ -29,8 +29,6 @@ from modules.news_fetcher import fetch_news  # &lt;--- ADDED
 from Plan.reminder_manager import check_and_send_reminders
 from Plan.reminder_manager import start_reminder_checker
 
-
-
 nest_asyncio.apply()
 load_dotenv()
 os.environ["KMP_DUPLICATE_LIB_OK"] = os.getenv("KMP_DUPLICATE_LIB_OK", "FALSE")
@@ -67,7 +65,6 @@ def mark_user_as_authorized(user_id):
             f.truncate()
             print("[DEBUG] Updating activated_users.json")
             print("[DEBUG] User added:", user_id)
-
 
 def is_key_used(key):
     with open(USED_KEYS_FILE, "r") as f:
