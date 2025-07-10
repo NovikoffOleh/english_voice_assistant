@@ -52,7 +52,7 @@ def parse_task_request(text: str) -> dict | None:
         "task_text": task_text
     }
 
-def parse_absolute_time_request(text: str, user_id: int) -> dict | None:
+async def parse_absolute_time_request(text: str, user_id: int) -> dict | None:
     """
     Parses phrases like: "remind me at 19:30", "remind at 7.45"
     Saves it via reminder_manager.add_reminder()
@@ -75,17 +75,15 @@ def parse_absolute_time_request(text: str, user_id: int) -> dict | None:
     if target_time <= now:
         target_time += timedelta(days=1)
 
-    # ⏱ Розрахунок і збереження
     interval_sec = int((target_time - now).total_seconds())
 
-    # Очистка службових слів
     cleaned_text = text.replace(match.group(0), "")
     cleaned_text = re.sub(r"\b(remind( me)?|at|to|minutes?|hours?)\b", "", cleaned_text)
     cleaned_text = re.sub(r"\s+", " ", cleaned_text).strip()
     task_text = cleaned_text if cleaned_text else "reminder"
 
-    # 📝 Запис у reminders.json
-    add_reminder(user_id, task_text, target_time.strftime("%Y-%m-%d %H:%M:%S"))
+    # 📝 Save to reminders.json
+    await add_reminder(user_id, task_text, target_time.strftime("%Y-%m-%d %H:%M:%S"))
 
     return {
         "interval_sec": interval_sec,
