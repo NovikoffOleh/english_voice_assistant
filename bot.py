@@ -572,7 +572,8 @@ async def main():
     #start_reminder_checker(app)
 
     await start_reminder_checker(app)
-    await application.run_polling()
+    await app.run_polling()
+
     
     print("🟢 Bot is running. Open Telegram and type /start")
     await app.run_polling()
