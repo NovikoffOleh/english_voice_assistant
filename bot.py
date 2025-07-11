@@ -34,6 +34,9 @@ from Plan.reminder_manager import start_reminder_checker
 
 from modules.timezone_utils import get_user_timezone_offset, set_user_timezone_offset
 
+from telegram import KeyboardButton, ReplyKeyboardMarkup
+from modules.timezone_utils import save_user_timezone
+
 
 nest_asyncio.apply()
 load_dotenv()
@@ -163,16 +166,25 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             greeting,
             reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
         )
-
+        
         # 👇 Просимо поділитися локацією лише якщо її ще немає
         from modules.timezone_utils import has_timezone_offset
+        from telegram import KeyboardButton, ReplyKeyboardMarkup
+
         user_id = update.effective_user.id
         if not has_timezone_offset(user_id):
-            await update.message.reply_text(
-                "📍 Please press the 'Share Location' button so I can adjust time zone for your reminders."
-            )
+            location_button = KeyboardButton(text="📍 Share Location", request_location=True)
+            keyboard = [[location_button]]
+            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
 
-    else:
+            await update.message.reply_text(
+               "📍 Please share your location so I can adjust the time zone for your reminders.",
+               reply_markup=reply_markup
+            )
+            return  # ⛔ зупиняємо тут, щоб не питати ім’я, доки не буде локації
+
+        # Якщо часовий пояс вже збережено — питаємо ім’я
+        greeting_time = get_greeting()  # або твоя функція для Good morning / evening
         await update.message.reply_text(f"{greeting_time}! 🤓 What is your name?")
         context.user_data["awaiting_name"] = True
 
@@ -275,6 +287,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"[Main Error] {e}")
         await update.message.reply_text("⚠️ A technical error occurred. Please try again later.")
+
+# обробка надсилання локації
+async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    location = update.message.location
+    if location:
+        lat = location.latitude
+        lon = location.longitude
+        save_user_timezone(user_id, lat, lon)
+        await update.message.reply_text("✅ Your timezone has been saved based on your location!")
+    else:
+        await update.message.reply_text("⚠️ I couldn't get your location. Please try again.")
+
 
 async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     if context.user_data.get("awaiting_name"):
