@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import asyncio
 import nest_asyncio
 from datetime import datetime
@@ -24,17 +25,62 @@ from Plan.planner import parse_task_request, parse_absolute_time_request
 from Plan.timer_manager import schedule_reminder
 from modules.mood_checker import send_mood_request, handle_mood_callback
 from modules.news_fetcher import fetch_news  # &lt;--- ADDED
-from modules.timezone_resolver import get_timezone
-from pytz import timezone as pytz_timezone
-import pytz
-
 
 nest_asyncio.apply()
 load_dotenv()
 os.environ["KMP_DUPLICATE_LIB_OK"] = os.getenv("KMP_DUPLICATE_LIB_OK", "FALSE")
 
 TOKEN = os.getenv("TOKEN")
+ADMIN_SECRET = os.getenv("ADMIN_SECRET")
+if not ADMIN_SECRET:
+    raise ValueError("❌ ADMIN_SECRET is not set. Check your .env file and reload the environment.")
 
+GIFT_KEYS = os.getenv("GIFT_KEYS", "").split(",")
+USED_KEYS_FILE = "data/used_keys.json"
+ACTIVATED_USERS_FILE = "data/activated_users.json"
+
+# Ensure used_keys.json and activated_users.json exist
+for file in [USED_KEYS_FILE, ACTIVATED_USERS_FILE]:
+    if not os.path.exists(file):
+        with open(file, "w") as f:
+            json.dump([], f)
+
+# --- Auth Logic ---
+def is_user_authorized(user_id):
+    with open(ACTIVATED_USERS_FILE, "r") as f:
+        users = json.load(f)
+    return user_id in users
+
+def mark_user_as_authorized(user_id):
+    with open(ACTIVATED_USERS_FILE, "r+") as f:
+        users = json.load(f)
+        if user_id not in users:
+            users.append(user_id)
+            f.seek(0)
+            json.dump(users, f)
+            f.truncate()
+            print("[DEBUG] Updating activated_users.json")
+            print("[DEBUG] User added:", user_id)
+
+
+def is_key_used(key):
+    with open(USED_KEYS_FILE, "r") as f:
+        used_keys = json.load(f)
+    return key in used_keys
+
+def mark_key_as_used(key):
+    with open(USED_KEYS_FILE, "r+") as f:
+        used_keys = json.load(f)
+        if key not in used_keys:
+            used_keys.append(key)
+            f.seek(0)
+            json.dump(used_keys, f)
+            f.truncate()
+            print("[DEBUG] Updating used_keys.json")
+            print("[DEBUG] Key added:", key)
+
+
+# --- Main UI ---
 GENRE_MAP = {
     "thriller": 53,
     "detective": 9648,
@@ -57,30 +103,36 @@ def clean_query(text):
     cleaned = " ".join(filtered)
     return re.sub(r"[^\w\s]", "", cleaned)
 
+# --- START command ---
+async def launch_assistant(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await start(update, context)
 
+
+async def start_with_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+
+    if not is_user_authorized(user_id):
+        await update.message.reply_text("🔒 Please enter your activation key:")
+        context.user_data["awaiting_password"] = True
+        return
+
+    await launch_assistant(update, context)
+
+# Если авторизован — запуск ассистента
+    
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name")
-    timezone_str = context.user_data.get("timezone")
 
     keyboard = [
         ["💬 Queries", "🎮 Movies"],
         ["🗓 Plan", "🧘 Relax"],
         ["🌤 Weather Forecast", "🗞 News"],
-        ["ℹ️ Help"]
+        ["ℹ️ Help", "🔑 Key"]
     ]
 
-    # Визначаємо локальний час, якщо timezone є
-    if timezone_str:
-        try:
-            tz = pytz.timezone(timezone_str)
-            now = datetime.now(tz).hour
-        except Exception as e:
-            print(f"[start] Timezone error: {e}")
-            now = datetime.now().hour
-    else:
-        now = datetime.now().hour
 
-    # Привітання по часу
+    now = datetime.now().hour
+
     if 5 <= now < 12:
         greeting_time = "🌅 Good morning"
     elif 12 <= now < 18:
@@ -90,27 +142,19 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         greeting_time = "🌙 Good night"
 
-    # Якщо ім'я є – показує головне меню
-    if name and timezone_str:
+    if name:
         greeting = (
-            f"{greeting_time}, {name}!\n"
+            f"{greeting_time}\n"
+            f"{name}!\n"
             "I am LUMO - your personal assistant for all your needs.\n"
             "I can answer queries, find photos, remind you of appointments, and plan your day.\n"
             "Just say or type: 'Show me a cat', 'Remind me to take my medicine in 5 minutes', and I'll do it.\n"
             "All commands: /help"
         )
         await update.message.reply_text(greeting, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
-
-    # Якщо ім'я є, але немає timezone → запитуємо місто
-    elif name and not timezone_str:
-        await update.message.reply_text(f"📍 {name}, to personalize my schedule, please tell me your city (e.g., London, Kyiv):")
-        context.user_data["awaiting_city"] = True
-
-    # Якщо ще немає імені → запитуємо ім’я
     else:
         await update.message.reply_text(f"{greeting_time}! 🤓 What is your name?")
         context.user_data["awaiting_name"] = True
-
 
 async def cinema_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -148,69 +192,39 @@ async def gpt_mode(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name", "friend")
     await update.message.reply_text(f"🔄  {name}, query mode is activated — you can ask questions or search for images.")
 
-from modules.timezone_resolver import get_timezone
 
+# --- MESSAGE HANDLER ---
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    chat_id = update.message.chat_id
+    user_id = update.effective_user.id
+    text = update.message.text.strip() if update.message.text else ""
 
-    # Введення імені
-    if context.user_data.get("awaiting_name"):
-        context.user_data["name"] = text
-        context.user_data["awaiting_name"] = False
-        await update.message.reply_text(f"Nice to meet you, {text} 😊")
-        await update.message.reply_text(f"📍 {text}, to personalize my schedule, please tell me your city (e.g., London, Kyiv):")
-        context.user_data["awaiting_city"] = True
-        return
+    # Обработка пароля
+    if context.user_data.get("awaiting_password"):
+        context.user_data["awaiting_password"] = False
 
-    # Введення міста
-    if context.user_data.get("awaiting_city"):
-        context.user_data["city"] = text
-        context.user_data["awaiting_city"] = False
-        context.user_data["timezone"] = text  # Поки так — потім підключимо реальну timezone по API
-        weather = await get_weather(text)
-        if weather:
-            await update.message.reply_text(weather)
-        await start(update, context)
-        return
 
-    # Планування
-    if "remind" in text.lower() or "meeting" in text.lower():
-        result = parse_absolute_time_request(text)
-        if result:
-            task_text, scheduled_time = result
-            schedule_reminder(context, chat_id, task_text, scheduled_time)
-            await update.message.reply_text(f"✅ Reminder set for: {task_text} at {scheduled_time.strftime('%H:%M')}")
+        #if text == ADMIN_SECRET:
+        if text.strip() == ADMIN_SECRET.strip():
+
+            mark_user_as_authorized(user_id)
+            await update.message.reply_text("✅ Admin access granted.")
+            await launch_assistant(update, context)
             return
+
+       
+        elif text.strip() in GIFT_KEYS and not is_key_used(text.strip()):
+            mark_key_as_used(text.strip())
+            mark_user_as_authorized(user_id)
+            await update.message.reply_text("✅ Access granted.")
+            await launch_assistant(update, context)
+            return
+
+
         else:
-            result = parse_task_request(text)
-            if result:
-                task_text, delay = result
-                schedule_reminder(context, chat_id, task_text, datetime.now() + delay)
-                await update.message.reply_text(f"✅ Reminder will be in {delay.seconds // 60} minutes")
-                return
-
-    # Окремий запит до погоди
-    if "weather" in text.lower():
-        city = context.user_data.get("city", "Kyiv")
-        weather = await get_weather(city)
-        if weather:
-            await update.message.reply_text(weather)
+            await update.message.reply_text("❌ Invalid or used key. Please try again.")
+            context.user_data["awaiting_password"] = True
             return
 
-    # Запит до GPT
-    if "?" in text or text.endswith("."):
-        name = context.user_data.get("name", "")
-        reply = ask_gpt(text)
-        await update.message.reply_text(reply)
-        return
-
-    # Інакше — ввічлива відповідь
-    await update.message.reply_text("🤔 I didn't understand. Try again or type /help.")
-
-
-
-async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         if update.message.voice:
            file = await context.bot.get_file(update.message.voice.file_id)
@@ -374,7 +388,7 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         sounds = {
             "🌧 rain": "https://www.youtube.com/watch?v=GxE6g1fLxoo",
             "🔥 fireplace": "https://www.youtube.com/watch?v=eyU3bRy2x44",
-            "🎵 relaxmusic": "https://www.youtube.com/watch?v=2OEL4P1Rz04"
+            "🎵 relax": "https://www.youtube.com/watch?v=2OEL4P1Rz04"
         }
         await update.message.reply_text(f"🎧 Enjoy relaxation: {sounds[text]}")
         return
@@ -388,9 +402,24 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
         await help_command(update, context)
         return
         
+        
     if text in ["🗞 news", "/news"]:
         await news_command(update, context)
         return
+    
+    if text in ["🔑 key", "/key"]:
+        key_info = (
+            "🔒 Your access to this bot is linked to your Telegram account.\n\n"
+            "✅ If you delete and later reopen the bot – access will remain.\n"
+            "✅ If you change your phone but keep the same Telegram account – access will remain.\n\n"
+            "⚠️ However, note:\n"
+            "🔁 If you create a new Telegram account (even with the same name),\n"
+            "🆕 Or register with a different phone number,\n"
+            "❌ The old access key will not work, as the bot won't recognize your new account."
+        )
+        await update.message.reply_text(key_info)
+        return
+
 
     if text in ["queries", "dialogue", "/gpt", "💬 queries"]:
         await gpt_mode(update, context)
@@ -444,7 +473,8 @@ from modules.mood_checker import send_mood_request, handle_mood_callback
 
 async def main():
     app = ApplicationBuilder().token(TOKEN).build()
-    app.add_handler(CommandHandler("start", start))
+
+    app.add_handler(CommandHandler("start", start_with_auth))  # ⬅️ Авторизація!
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("plan", plan_command))
     app.add_handler(CommandHandler("cinema", cinema_command))
@@ -452,16 +482,20 @@ async def main():
     app.add_handler(MessageHandler(filters.TEXT | filters.VOICE, handle_message))
     app.add_handler(CallbackQueryHandler(handle_mood_callback, pattern=r"^mood_"))
 
-    # 🧠 Mood request async wrapper function
+    # ⏰ Scheduler
     async def run_send_mood():
         await send_mood_request(app)
-
-    # ⏰ Scheduler
+ #   scheduler = AsyncIOScheduler()
+   #  scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=8, minute=0))
+   #  scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=12, minute=0))
+    # scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=16, minute=0))
+   #  scheduler.add_job(lambda: send_mood_request(app), CronTrigger(hour=20, minute=0))
+    # scheduler.start()
     scheduler = AsyncIOScheduler()
     scheduler.add_job(run_send_mood, CronTrigger(hour=8, minute=0))
     scheduler.add_job(run_send_mood, CronTrigger(hour=12, minute=0))
     scheduler.add_job(run_send_mood, CronTrigger(hour=16, minute=0))
-    scheduler.add_job(run_send_mood, CronTrigger(hour=19, minute=0))  # test
+    scheduler.add_job(run_send_mood, CronTrigger(hour=20, minute=0))
     scheduler.start()
 
     print("🟢 Bot is running. Open Telegram and type /start")
@@ -469,6 +503,6 @@ async def main():
 
 if __name__ == "__main__":
     import nest_asyncio
-    nest_asyncio.apply()
+    #nest_asyncio.apply()
     asyncio.run(main())
 

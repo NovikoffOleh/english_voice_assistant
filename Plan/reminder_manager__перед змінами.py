@@ -1,12 +1,10 @@
 import json
 import asyncio
-from datetime import datetime, timedelta
+from datetime import datetime
 from telegram import Bot
 from telegram.ext import Application
-import pytz
 
 REMINDER_FILE = "data/reminders.json"
-TIMEZONE_FILE = "data/timezones.json"
 
 async def load_reminders():
     try:
@@ -18,13 +16,6 @@ async def load_reminders():
 async def save_reminders(reminders):
     with open(REMINDER_FILE, "w") as f:
         json.dump(reminders, f, indent=2)
-
-async def load_timezones():
-    try:
-        with open(TIMEZONE_FILE, "r") as f:
-            return json.load(f)
-    except (FileNotFoundError, json.JSONDecodeError):
-        return {}
 
 async def add_reminder(user_id, task_text, target_time_str):
     reminders = await load_reminders()
@@ -39,24 +30,17 @@ async def add_reminder(user_id, task_text, target_time_str):
 
 async def check_and_send_reminders(bot: Bot):
     while True:
-        now_utc = datetime.utcnow()
+        now = datetime.now()
         reminders = await load_reminders()
-        timezones = await load_timezones()
         updated = False
 
         for user_id, user_reminders in list(reminders.items()):
             to_send = []
 
-            # Отримати офсет користувача
-            user_offset = timezones.get(str(user_id), 0)  # якщо не задано — UTC
-
             for reminder in user_reminders:
                 try:
                     target_time = datetime.fromisoformat(reminder["time"])
-                    # Додати офсет користувача до поточного UTC часу
-                    user_now = now_utc + timedelta(hours=user_offset)
-                    seconds_diff = (user_now - target_time).total_seconds()
-
+                    seconds_diff = (now - target_time).total_seconds()
                     if 0 <= seconds_diff <= 60:
                         to_send.append(reminder)
                 except Exception:
@@ -73,7 +57,7 @@ async def check_and_send_reminders(bot: Bot):
         if updated:
             await save_reminders(reminders)
 
-        await asyncio.sleep(30)
+        await asyncio.sleep(30)  # check every 30 seconds
 
 async def start_reminder_checker(application: Application):
     bot = application.bot
