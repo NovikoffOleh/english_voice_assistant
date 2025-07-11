@@ -30,7 +30,8 @@ from modules.news_fetcher import fetch_news  # &lt;--- ADDED
 from modules.translator import translate
 from telegram.ext import MessageHandler, filters
 
-from modules.reminder_manager import start_reminder_checker
+from Plan.reminder_manager import start_reminder_checker
+
 from modules.timezone_utils import get_user_timezone_offset, set_user_timezone_offset
 
 
