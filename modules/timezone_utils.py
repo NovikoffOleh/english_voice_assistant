@@ -42,3 +42,17 @@ def has_timezone_offset(user_id):
             data = json.load(f)
         return str(user_id) in data
     return False
+
+def get_user_timezone_offset(user_id):
+    """
+    Returns the timedelta offset of the user's timezone relative to UTC.
+    """
+    timezone_str = get_user_timezone(user_id)
+    try:
+        tz = pytz.timezone(timezone_str)
+        now = datetime.now(tz)
+        offset = now.utcoffset()
+        return offset.total_seconds() / 3600  # <- саме float
+    except Exception as e:
+        print(f"[⚠️] Failed to get offset for user {user_id}: {e}")
+        return 0
