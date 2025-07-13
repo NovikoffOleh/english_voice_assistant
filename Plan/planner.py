@@ -1,8 +1,7 @@
 import re
 from datetime import datetime, timedelta
-import pytz
-from modules.timezone_utils import get_user_timezone_offset
 
+# Словники для текстових чисел
 DIGITS = {
     "one": 1, "two": 2, "three": 3, "four": 4, "five": 5,
     "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10
@@ -39,21 +38,25 @@ def parse_task_request(text: str) -> dict | None:
     if not (hours or minutes):
         return None
 
-    interval = timedelta(hours=hours, minutes=minutes)
-    task_text = re.sub(r"\b(in|remind( me)?|to|minutes?|hours?)\b", "", text)
-    task_text = re.sub(r"\s+", " ", task_text).strip() or "reminder"
+    interval_sec = hours * 3600 + minutes * 60
+
+    # Clean extra words
+    cleaned_text = re.sub(r"\b(in|remind( me)?|to|minutes?|hours?)\b", "", text)
+    cleaned_text = re.sub(r"\s+", " ", cleaned_text).strip()
+    task_text = cleaned_text if cleaned_text else "reminder"
 
     return {
-        "interval": interval,
+        "interval_sec": interval_sec,
         "task_text": task_text
     }
 
-async def parse_absolute_time_request(text: str, user_id: int) -> dict | None:
+
+def parse_absolute_time_request(text: str) -> dict | None:
     """
     Parses phrases like: "remind me at 19:30", "remind at 7.45"
-    Returns target UTC time in ISO format.
     """
     text = text.lower().strip()
+
     match = re.search(r"(at\s*)?(\d{1,2})([:\.\-])?(\d{2})?", text)
     if not match:
         return None
@@ -64,23 +67,22 @@ async def parse_absolute_time_request(text: str, user_id: int) -> dict | None:
     except ValueError:
         return None
 
-    # Отримуємо локальний час користувача
-    user_offset = await get_user_timezone_offset(user_id)
-    user_now = datetime.utcnow() + timedelta(hours=user_offset)
-    user_target = user_now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    now = datetime.now()
+    target_time = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
 
-    if user_target <= user_now:
-        user_target += timedelta(days=1)
+    if target_time <= now:
+        target_time += timedelta(days=1)
 
-    # Конвертуємо в UTC
-    target_utc = user_target - timedelta(hours=user_offset)
-    target_iso = target_utc.isoformat()
+    interval_sec = int((target_time - now).total_seconds())
 
-    task_text = text.replace(match.group(0), "")
-    task_text = re.sub(r"\b(remind( me)?|at|to|minutes?|hours?)\b", "", task_text)
-    task_text = re.sub(r"\s+", " ", task_text).strip() or "reminder"
+
+    # Очистка від службових слів
+    cleaned_text = text.replace(match.group(0), "")
+    cleaned_text = re.sub(r"\b(remind( me)?|at|to|minutes?|hours?)\b", "", cleaned_text)
+    cleaned_text = re.sub(r"\s+", " ", cleaned_text).strip()
+    task_text = cleaned_text if cleaned_text else "reminder"
 
     return {
-        "target_time_utc": target_iso,
+        "interval_sec": interval_sec,
         "task_text": task_text
     }

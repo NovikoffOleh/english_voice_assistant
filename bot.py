@@ -13,11 +13,9 @@ from telegram.ext import (
     ContextTypes,
     filters
 )
-
 from dotenv import load_dotenv
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-
 from modules.voice_recognizer import recognize_speech
 from modules.gpt_handler import ask_gpt
 from modules.image_search import get_image_url
@@ -27,17 +25,6 @@ from Plan.planner import parse_task_request, parse_absolute_time_request
 from Plan.timer_manager import schedule_reminder
 from modules.mood_checker import send_mood_request, handle_mood_callback
 from modules.news_fetcher import fetch_news  # &lt;--- ADDED
-
-from modules.translator import translate
-from telegram.ext import MessageHandler, filters
-
-from Plan.reminder_manager import start_reminder_checker
-
-from modules.timezone_utils import get_user_timezone_offset, set_user_timezone_offset
-
-from telegram import KeyboardButton, ReplyKeyboardMarkup
-from modules.timezone_utils import save_user_timezone
-
 
 nest_asyncio.apply()
 load_dotenv()
@@ -131,7 +118,8 @@ async def start_with_auth(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await launch_assistant(update, context)
 
-# Якщо авторизований — запуск асистента
+# Если авторизован — запуск ассистента
+    
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     name = context.user_data.get("name")
 
@@ -139,9 +127,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ["💬 Queries", "🎮 Movies"],
         ["🗓 Plan", "🧘 Relax"],
         ["🌤 Weather Forecast", "🗞 News"],
-        ["ℹ️ Help", "🔑 Key"],
-        ["📍 Share Location"]
+        ["ℹ️ Help", "🔑 Key"]
     ]
+
 
     now = datetime.now().hour
 
@@ -163,32 +151,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Just say or type: 'Show me a cat', 'Remind me to take my medicine in 5 minutes', and I'll do it.\n"
             "All commands: /help"
         )
-        await update.message.reply_text(
-            greeting,
-            reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
-        )
-        
-        # 👇 Просимо поділитися локацією лише якщо її ще немає
-        from modules.timezone_utils import has_timezone_offset
-        from telegram import KeyboardButton, ReplyKeyboardMarkup
-
-        user_id = update.effective_user.id
-        if not has_timezone_offset(user_id):
-            location_button = KeyboardButton(text="📍 Share Location", request_location=True)
-            keyboard = [[location_button]]
-            reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=True)
-
-            await update.message.reply_text(
-               "📍 Please share your location so I can adjust the time zone for your reminders.",
-               reply_markup=reply_markup
-            )
-            return  # ⛔ зупиняємо тут, щоб не питати ім’я, доки не буде локації
-
-        # Якщо часовий пояс вже збережено — питаємо ім’я
-        greeting_time = get_greeting()  # або твоя функція для Good morning / evening
+        await update.message.reply_text(greeting, reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True))
+    else:
         await update.message.reply_text(f"{greeting_time}! 🤓 What is your name?")
         context.user_data["awaiting_name"] = True
-
 
 async def cinema_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
@@ -288,19 +254,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         print(f"[Main Error] {e}")
         await update.message.reply_text("⚠️ A technical error occurred. Please try again later.")
-
-# обробка надсилання локації
-async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    location = update.message.location
-    if location:
-        lat = location.latitude
-        lon = location.longitude
-        save_user_timezone(user_id, lat, lon)
-        await update.message.reply_text("✅ Your timezone has been saved based on your location!")
-    else:
-        await update.message.reply_text("⚠️ I couldn't get your location. Please try again.")
-
 
 async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str):
     if context.user_data.get("awaiting_name"):
@@ -486,6 +439,16 @@ async def process_text(update: Update, context: ContextTypes.DEFAULT_TYPE, text:
             await update.message.reply_text(f"✅ Reminder set\n⏳ I will remind you in {parsed['interval_sec'] // 60} minutes")
             return
 
+        parsed_abs = parse_absolute_time_request(text)
+        if parsed_abs:
+            task_text = parsed_abs["task_text"].replace("remind", "", 1).strip()
+            schedule_reminder(context, update.effective_chat.id, task_text, parsed_abs["interval_sec"])
+            await update.message.reply_text(f"✅ Reminder set\n🕒 It will trigger at the specified time")
+            return
+
+        await update.message.reply_text("⚠️ Could not recognize the time. Please try again.")
+        return
+
     if any(trigger in text for trigger in trigger_words):
         query = clean_query(text)
         await update.message.reply_text("🔍 Searching for an image...")
@@ -512,7 +475,6 @@ async def main():
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start_with_auth))  # ⬅️ Авторизація!
-    app.add_handler(MessageHandler(filters.LOCATION, handle_location))  # 👈 Додаємо обробник геолокації
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CommandHandler("plan", plan_command))
     app.add_handler(CommandHandler("cinema", cinema_command))
@@ -538,24 +500,6 @@ async def main():
 
     print("🟢 Bot is running. Open Telegram and type /start")
     await app.run_polling()
-    
-from modules.timezone_utils import save_user_timezone
-
-# --- LOCATION HANDLER ---
-async def handle_location(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        location = update.message.location
-        latitude = location.latitude
-        longitude = location.longitude
-        user_id = update.effective_user.id
-
-        # Зберегти таймзону користувача у файлі
-        save_user_timezone(user_id, latitude, longitude)
-
-        await update.message.reply_text("📍 Location received. Your timezone has been set.")
-    except Exception as e:
-        print(f"[Location Error] {e}")
-        await update.message.reply_text("⚠️ Failed to process your location.")
 
 if __name__ == "__main__":
     import nest_asyncio
