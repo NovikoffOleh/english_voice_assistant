@@ -176,7 +176,6 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/news — news for the hour\n"
         "/gpt — query mode\n"
         "/help — help\n"
-        "⚠️ — tasks with time intervals like 'remind me at 8:45 PM to turn on the TV' can only be entered manually\n"
         "⚠️ — movie titles must be entered in English and only manually\n"
         "⚠️ — the bot accepts urgent tasks for one day\n"
     )
