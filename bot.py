@@ -148,6 +148,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"{name}!\n"
             "I am LUMO - your personal assistant for all your needs.\n"
             "I can answer queries, find photos, remind you of appointments, and plan your day.\n"
+            "Throughout the day, I will provide you with astrological predictions based on your emotions.\n"
             "Just say or type: 'Show me a cat', 'Remind me to take my medicine in 5 minutes', and I'll do it.\n"
             "All commands: /help"
         )
@@ -178,6 +179,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/help — help\n"
         "⚠️ — movie titles must be entered in English and only manually\n"
         "⚠️ — the bot accepts urgent tasks for one day\n"
+        "⚙️ — technical support: nova.it.game@gmail.com\n"
     )
     await update.message.reply_text(help_text)
 
